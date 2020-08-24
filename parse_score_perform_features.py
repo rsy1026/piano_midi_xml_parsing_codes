@@ -543,7 +543,7 @@ def parse_test_x_features(midi_path, quarter=None, sec=None):
 
 	return input_list, sub_notes
 
-def parse_test_y_features(parent_dir, xml, score, perform, ind=None):
+def parse_test_y_features(parent_dir, xml, score, perform):
 
 	# get xml_score_perform_pairs
 	midi_name = os.path.basename(perform).split(".")[0]
@@ -556,10 +556,6 @@ def parse_test_y_features(parent_dir, xml, score, perform, ind=None):
 
 	pairs_score = [p for p in pairs if p['score_midi'] is not None]
 	pairs_score = sorted(pairs_score, key=lambda x: x['score_midi'][0])
-
-	# trim
-	ind = trim_length_pairs(pairs_score, sec=sec)
-	pairs_score = pairs_score[:ind]
 
 	prev_onset = 0.
 	first_onset_group = list()
