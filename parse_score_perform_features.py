@@ -495,6 +495,28 @@ def trim_length_pairs(pairs, sec=None):
 def parse_test_x_features(midi_path, quarter=None, sec=None):
 
 	midi_notes = extract_midi_notes(midi_path)
+	
+	if quarter is None:
+		dur_dict = dict()
+		prev_note = None
+		for note in midi_notes:
+			if prev_note is None:
+				prev_note = note
+				continue
+			onset = Decimal(str(note.start))
+			prev_onset = Decimal(str(prev_note.start))
+			dur = round(onset - prev_onset, 3)
+			try:
+				dur_dict[dur] += 1
+			except KeyError:
+				dur_dict[dur] = 1
+			prev_note = note
+		quarter_cand = sorted(dur_dict.items(), key=lambda x: x[1], reverse=True)
+		for q, _ in quarter_cand:
+			if float(q) >= 0.3 and float(q) <= 2.5:
+				break
+		quarter = float(q)
+	
 	dur_16th = Decimal(str(quarter)) / 4
 
 	# set start to 0
@@ -541,7 +563,7 @@ def parse_test_x_features(midi_path, quarter=None, sec=None):
 	assert len(sub_notes) == len(input_list)
 	input_list = np.array(input_list)
 
-	return input_list, sub_notes
+	return input_list, sub_notes, quarter
 
 def parse_test_y_features(parent_dir, xml, score, perform):
 
@@ -667,270 +689,6 @@ def parse_test_y_features(parent_dir, xml, score, perform):
 	output_list[:,3] = ioi
 
 	return output_list
-
-def inverse_rendering(
-    features=None, features2=None, piece=None, mm=None, name=None, exp_num=None, save_score=False):
-    piece_path = '/data/chopin_maestro/original/Chopin_Etude/{}'.format(piece)
-    test_path = '/data/chopin_maestro/exp_data/test/batch_measure'
-    pair_path = os.path.join(piece_path, '1/xml_score_perform_pairs.npy')
-    pairs = [p for p in np.load(pair_path).tolist() if p['score_midi'] is not None]
-    pairs = sorted(pairs, key=lambda x: x['xml_note'][0])
-    pairs_measure = [p for p in pairs 
-        if p['xml_note'][1].measure_number >= (mm[0]-1) and p['xml_note'][1].measure_number < mm[1]]
-    pairs_measure = sorted(pairs_measure, key=lambda x: x['score_midi'][0])
-    cond = np.load(os.path.join(test_path, "chopin_etude.{}.1.batch_c.mm_{}-{}.npy".format(piece, mm[0], mm[1])))
-    inp = np.load(os.path.join(test_path, "chopin_etude.{}.1.batch_x.mm_{}-{}.npy".format(piece, mm[0], mm[1])))
-    _vel = features[:,0]
-    _loc = features[:,1]
-    _dur = features[:,2]
-    _ioi = features2
-    assert len(pairs_measure) == len(_vel) == len(cond) == len(inp)
-
-    # make deadpan MIDI
-    score_notes_norm = list()
-    prev_note = None
-    prev_new_note = None
-    for i, pair in enumerate(pairs_measure):
-        each_cond = cond[i]
-        tempo = each_cond[0]
-        tempo_ratio = tempo / 160
-        tempo_ratio = Decimal(str(tempo_ratio))
-        note = pair['score_midi'][1]
-
-        if prev_note is None:
-            note_dur = Decimal(str(note.end)) - Decimal(str(note.start))
-            note_onset = Decimal(str(note.start))
-            note_offset = note_onset + (note_dur * tempo_ratio)
-            new_note = pretty_midi.containers.Note(velocity=note.velocity,
-                                                   pitch=note.pitch,
-                                                   start=float(note_onset),
-                                                   end=float(note_offset))
-        elif prev_note is not None:
-            if prev_note.start < note.start:
-                note_dur = Decimal(str(note.end)) - Decimal(str(note.start))
-                note_ioi = Decimal(str(note.start)) - Decimal(str(prev_note.start))
-                note_onset = Decimal(str(prev_new_note.start)) + (note_ioi * tempo_ratio)
-                note_offset = note_onset + (note_dur * tempo_ratio)
-                new_note = pretty_midi.containers.Note(velocity=note.velocity,
-                                                       pitch=note.pitch,
-                                                       start=float(note_onset),
-                                                       end=float(note_offset))
-            elif prev_note.start == note.start:
-                note_dur = Decimal(str(note.end)) - Decimal(str(note.start))
-                note_onset = note_onset
-                note_offset = note_onset + (note_dur * tempo_ratio)
-                new_note = pretty_midi.containers.Note(velocity=note.velocity,
-                                                       pitch=note.pitch,
-                                                       start=float(note_onset),
-                                                       end=float(note_offset))
-        score_notes_norm.append(new_note)
-        prev_note = note
-        prev_new_note = new_note
-    score_notes_norm = make_midi_start_zero(score_notes_norm)
-
-    if save_score is True:
-        save_new_midi(score_notes_norm, new_midi_path="score_norm_{}_mm{}-{}.mid".format(piece, mm[0], mm[1]))
-
-    rendered_notes = list()
-    prev_note = None
-    prev_new_note = None
-
-    _ioi_expand = make_note_based(inp, _ioi)
-    for i in range(len(_vel)):
-        pair = pairs[i]
-        note = score_notes_norm[i]
-        each_cond = cond[i]
-        each_in = inp[i]
-        vel = _vel[i]
-        loc = Decimal(str(_loc[i]))
-        dur = Decimal(str(_dur[i]))
-        ioi = Decimal(str(_ioi_expand[i]))
-        tempo = each_cond[0]
-        tempo_ratio_rev = 160 / tempo
-        tempo_ratio_rev = Decimal(str(tempo_ratio_rev))
-        same_onset = np.argmax(each_in[-2:]) # 0-False, 1-True
-
-        dur_16th = (60 / 160) / 4
-        dur_16th = round(Decimal(str(dur_16th)), 3)
-        dur_16th_orig = dur_16th * tempo_ratio_rev
-        dur_16th_orig = round(dur_16th_orig, 3)
-        new_vel = int(vel)
-
-        if same_onset == 0: # False
-            if prev_note is None:
-                onset_for_ioi = -dur_16th_orig
-                old_ioi = Decimal(str(note.start)) + dur_16th
-                
-            elif prev_note is not None:
-                onset_for_ioi = Decimal(str(np.mean(same_onset_notes)))
-                old_ioi = Decimal(str(note.start)) - Decimal(str(prev_note.start))
-
-            new_ioi = old_ioi * ioi
-            new_dur = (Decimal(str(note.end)) - Decimal(str(note.start))) * dur
-            new_dur = np.max([Decimal(0.025), new_dur])
-            new_onset = onset_for_ioi + round(new_ioi, 3) + loc
-            new_offset = new_onset + round(new_dur, 3)
-            same_onset_notes = [new_onset]
-
-        elif same_onset == 1: # True
-            new_ioi = old_ioi * ioi
-            new_dur = (Decimal(str(note.end)) - Decimal(str(note.start))) * dur
-            new_dur = np.max([Decimal(0.025), new_dur])
-            new_onset = onset_for_ioi + round(new_ioi, 3) + loc
-            new_offset = new_onset + round(new_dur, 3)
-            same_onset_notes.append(new_onset)  
-
-        
-        new_note = pretty_midi.containers.Note(velocity=new_vel,
-                                               pitch=note.pitch,
-                                               start=float(new_onset),
-                                               end=float(new_offset))
-
-        rendered_notes.append(new_note)
-        prev_note = note
-        prev_new_note = new_note
-
-    save_new_midi(rendered_notes, new_midi_path="{}_{}_mm{}-{}_exp{}.mid".format(name, piece, mm[0], mm[1], exp_num))
-
-def inverse_rendering_test(
-    input_midi=None, input_notes=None, save_dir=None, inp=None, features=None, features2=None, 
-    quarter=None, tempo_rate=None, name=None, p_name=None, exp_num=None, epoch_num=None, save_score=False):
-    if input_notes is None:
-        midi_notes = extract_midi_notes(input_midi)
-    elif input_notes is not None:
-        midi_notes = input_notes
-
-    if tempo_rate is None:
-        tempo_rate = Decimal(str(1.))
-    elif tempo_rate is not None:
-        tempo_rate = Decimal(str(tempo_rate))
-        quarter = Decimal(str(quarter)) * tempo_rate
-
-    # make deadpan MIDI
-    score_notes_norm = list()
-    prev_note = None
-    prev_new_note = None
-    for i, note in enumerate(midi_notes): 
-
-        if prev_note is None:
-            note_dur = Decimal(str(note.end)) - Decimal(str(note.start))
-            note_onset = Decimal(str(note.start))
-            note_offset = note_onset + note_dur * tempo_rate
-            new_note = pretty_midi.containers.Note(velocity=64,
-                                                   pitch=note.pitch,
-                                                   start=float(note_onset),
-                                                   end=float(note_offset))
-        elif prev_note is not None:
-            if prev_note.start < note.start:
-                note_dur = Decimal(str(note.end)) - Decimal(str(note.start))
-                note_ioi = Decimal(str(note.start)) - Decimal(str(prev_note.start))
-                note_onset = Decimal(str(prev_new_note.start)) + note_ioi * tempo_rate
-                note_offset = note_onset + note_dur * tempo_rate
-                new_note = pretty_midi.containers.Note(velocity=64,
-                                                       pitch=note.pitch,
-                                                       start=float(note_onset),
-                                                       end=float(note_offset))
-            elif prev_note.start == note.start:
-                note_dur = Decimal(str(note.end)) - Decimal(str(note.start))
-                note_onset = note_onset
-                note_offset = note_onset + note_dur * tempo_rate
-                new_note = pretty_midi.containers.Note(velocity=64,
-                                                       pitch=note.pitch,
-                                                       start=float(note_onset),
-                                                       end=float(note_offset))
-        score_notes_norm.append(new_note)
-        prev_note = note
-        prev_new_note = new_note
-    score_notes_norm = make_midi_start_zero(score_notes_norm)
-
-    if save_score is True:
-        save_new_midi(score_notes_norm, new_midi_path=os.path.join(save_dir, "score_norm_{}.mid".format(p_name)))
-
-    rendered_notes = list()
-    prev_note = None
-    prev_new_note = None
-
-    _vel = features[:,0]
-    _loc = features[:,1]
-    _dur = features[:,2]
-    _ioi = features2
-    _ioi_expand = make_note_based(inp, _ioi)
-    for i in range(len(_vel)):
-        note = score_notes_norm[i]
-        each_in = inp[i]
-        vel = _vel[i]
-        loc = Decimal(str(_loc[i]))
-        dur = Decimal(str(_dur[i]))
-        ioi = Decimal(str(_ioi_expand[i]))
-        same_onset = np.argmax(each_in[-2:]) # 0-False, 1-True
-
-        dur_16th = Decimal(str(quarter)) / 4
-        dur_16th = round(dur_16th, 3)
-        new_vel = np.min([int(vel), 127])
-
-        if same_onset == 0: # False
-            if prev_note is None:
-                onset_for_ioi = -dur_16th
-                old_ioi = Decimal(str(note.start)) + dur_16th
-                
-            elif prev_note is not None:
-                onset_for_ioi = Decimal(str(np.mean(same_onset_notes)))
-                old_ioi = Decimal(str(note.start)) - Decimal(str(prev_note.start))
-
-            new_ioi = old_ioi * ioi
-            new_dur = (Decimal(str(note.end)) - Decimal(str(note.start))) * dur
-            new_dur = np.max([Decimal(0.025), new_dur])
-            new_onset = onset_for_ioi + round(new_ioi, 3) + loc
-            new_offset = new_onset + round(new_dur, 3)
-            same_onset_notes = [new_onset]
-
-        elif same_onset == 1: # True
-            new_ioi = old_ioi * ioi
-            new_dur = (Decimal(str(note.end)) - Decimal(str(note.start))) * dur
-            new_dur = np.max([Decimal(0.025), new_dur])
-            new_onset = onset_for_ioi + round(new_ioi, 3) + loc
-            new_offset = new_onset + round(new_dur, 3)
-            same_onset_notes.append(new_onset)  
-
-        
-        new_note = pretty_midi.containers.Note(velocity=new_vel,
-                                               pitch=note.pitch,
-                                               start=float(new_onset),
-                                               end=float(new_offset))
-
-        rendered_notes.append(new_note)
-        prev_note = note
-        prev_new_note = new_note
-
-    save_new_midi(rendered_notes, new_midi_path=os.path.join(
-        save_dir, "{}_{}_exp{}_{}.mid".format(name, p_name, exp_num, epoch_num)))
-
-def inverse_feature(
-    sampled_y, sampled_y2, numpy=False, interp=None):
-    vel = sampled_y[0,:,0]
-    loc = sampled_y[0,:,1]
-    dur = sampled_y[0,:,2]
-    ioi = sampled_y2[0,:,-1]
-
-    if numpy is False:
-        vel = vel.cpu().data.numpy()
-        loc = loc.cpu().data.numpy()
-        dur = dur.cpu().data.numpy()
-        ioi = ioi.cpu().data.numpy()
-
-    if interp == "tanh":
-        vel = np.interp(vel, [-1, 1], [24, 104])
-        loc = np.interp(loc, [-1, 1], [-0.37, 0.37])
-        dur = np.interp(dur, [-1, 1], [-0.9, 0.9])
-        ioi = np.interp(ioi, [-1, 1], [-0.6, 0.6])
-
-    # vel_ = np.power(10, vel) * 64
-    vel_ = vel
-    loc_ = loc ** 3
-    dur_ = np.power(10, dur)
-    ioi_ = np.power(10, ioi)
-    return vel_, loc_, dur_, ioi_
-
 
 def feature_distribution():
 	dirname = '/home/rsy/Dropbox/RSY/Piano/data/chopin_maestro/original'
