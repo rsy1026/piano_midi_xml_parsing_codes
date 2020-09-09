@@ -9,11 +9,11 @@ Default setting is to split into all measures
 
 To split particular measures: 
 
-	python3 main.py /home/user/data /home/user/savedir start_measure end_measure
+	python3 main.py /home/user/data /home/user/savedir <start_measure> <end_measure>
 
 
-The current code includes several steps:
-    - perform WAV, score XML, score MIDI, and perform MIDI should be prepared
+The current code includes several steps:\n
+- perform WAV, score XML, score MIDI, and perform MIDI should be prepared
 
    1-1. perform WAV - perform MIDI --> midi file("*_aligned.mid")
         - temporally align performance audio with performance MIDI
