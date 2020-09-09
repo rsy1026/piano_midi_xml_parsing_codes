@@ -14,13 +14,13 @@ To split particular measures:
 The current code includes several steps:
 > perform WAV, score XML, score MIDI, and perform MIDI should be prepared
 
-1.1. perform WAV - perform MIDI --> midi file("*_aligned.mid")
+1-1. perform WAV - perform MIDI --> midi file("*_aligned.mid")
 - temporally align performance audio with performance MIDI
+- https://github.com/craffel/pretty-midi/blob/master/examples/align_midi.py
 - FUNCTIONS:
 	- align_wav_midi()
-	- https://github.com/craffel/pretty-midi/blob/master/examples/align_midi.py
 
-1.2. score MIDI - perform MIDI --> corresp file("*_corresp.text") 
+1-2. score MIDI - perform MIDI --> corresp file("*_corresp.text") 
 - match score-performance MIDI with Nakamura algorithm 
 - https://midialignment.github.io/demo.html (Nakamura et al., 2017)
 - FUNCTIONS:
@@ -42,6 +42,6 @@ The current code includes several steps:
 - FUNCTIONS:
 	- split_wav_by_measure()
 
-** Other things
+* Other things
 - 못갖춘마디도 마디수에 포함 
 
