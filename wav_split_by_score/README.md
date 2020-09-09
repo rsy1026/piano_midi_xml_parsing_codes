@@ -42,6 +42,7 @@ The current code includes several steps:
 - FUNCTIONS:
 	- split_wav_by_measure()
 
-* Other things
+
+Other things
 - 못갖춘마디도 마디수에 포함 
 
