@@ -5,11 +5,11 @@ Prepare requirements:
 
 Default setting is to split into all measures
     
-        python3 main.py /home/user/data /home/user/savedir
+	python3 main.py /home/user/data /home/user/savedir
 
 To split particular measures: 
 
-        python3 main.py /home/user/data /home/user/savedir start_measure end_measure
+	python3 main.py /home/user/data /home/user/savedir start_measure end_measure
 
 
 The current code includes several steps:
