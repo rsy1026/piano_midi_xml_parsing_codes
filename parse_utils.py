@@ -1,5 +1,4 @@
 from musicxml_parser import MusicXMLDocument
-from nakamura_match import save_cleaned_midi
 
 import os
 import sys
@@ -294,12 +293,47 @@ def check_overlapped_midi_notes():
             print("checked midi for {}: {} ({}/{})".format(
                 category, piece, len(midi_notes), len(midi_notes_)))
 
+def get_cleaned_midi(
+    filepath, savename=None, no_vel=None, no_pedal=None, save=True):
+    filename = os.path.basename(filepath).split('.')[0]
+    midi = pretty_midi.PrettyMIDI(filepath)
+    midi_new = pretty_midi.PrettyMIDI(resolution=1000, initial_tempo=120) # new midi object
+    inst_new = pretty_midi.Instrument(0) # new instrument object
+    min_pitch, max_pitch = 21, 108
+    orig_note_num = 0
+    for inst in midi.instruments: # existing object from perform midi
+        for note in inst.notes:
+            if note.pitch >= min_pitch and note.pitch <= max_pitch:
+                inst_new.notes.append(note)
+        for cc in inst.control_changes:
+            inst_new.control_changes.append(cc)
+        orig_note_num += len(inst.notes)
+    new_note_num = len(inst_new.notes)
+    # append new instrument
+    midi_new.instruments.append(inst_new)
+    midi_new.remove_invalid_notes()
+    # in case of removing velocity/pedals
+    for track in midi_new.instruments:
+        if no_vel == True:
+            for i in range(len(track.notes)):
+                track.notes[i].velocity = 64
+        if no_pedal == True:
+            track.control_changes = list()
+    if save == True:
+        midi_new.write(savename)
+        return None
+    elif save == False:
+        return midi_new
+
+    print("{}: {}/{} notes saved --> plain vel: {}".format(
+        filename, new_note_num, orig_note_num, no_vel))
+
 def extract_midi_notes(midi_path, clean=True):
     if clean is False:
         midi_obj = pretty_midi.PrettyMIDI(midi_path)
 
     elif clean is True:
-        midi_obj = save_cleaned_midi(
+        midi_obj = get_cleaned_midi(
             midi_path, no_vel=True, no_pedal=True, save=False)
 
     midi_notes = list()
@@ -392,7 +426,7 @@ def extract_corresp(corresp, num_score, num_perform):
     check_corresp_notes(lines_, num_score, num_perform)
     return lines_
 
-def match_xml_to_scoreMIDI(xml_parsed, score_parsed):
+def match_XML_to_scoreMIDI(xml_parsed, score_parsed):
     # check which measures contains grace notes
     grace_measures = [xml_['note'].measure_number 
         for xml_ in xml_parsed if xml_['note'].is_grace_note == True]
@@ -413,7 +447,6 @@ def match_xml_to_scoreMIDI(xml_parsed, score_parsed):
         xml_note = xml_['note']
         xml_measure = xml_['measure']
         measure_number = xml_note.measure_number
-
         xml_note_start = xml_note.note_duration.time_position
         xml_pos = xml_note.x_position
         pair = None
@@ -466,15 +499,22 @@ def match_xml_to_scoreMIDI(xml_parsed, score_parsed):
                             if xml_note.pitch[1] == score_note.pitch:
                                 match = True 
                         else:
+                            # for r in reversed(range(x)):
+                            #     if xml_pos != xml_parsed[r]['note'].x_position and \
+                            #         xml_parsed[r]['note'].is_grace_note == False and \
+                            #         pairs[r]['score_midi'] is not None:
+                            #         if pairs[r]['score_midi'][0] >= r:
+                            #             continue
+                            #         elif pairs[r]['score_midi'][0] < r:
+                            #             break 
+                                
                             for r in reversed(range(x)):
                                 if xml_pos != xml_parsed[r]['note'].x_position and \
-                                    xml_parsed[r]['note'].is_grace_note == False and \
                                     pairs[r]['score_midi'] is not None:
-                                    if pairs[r]['score_midi'][0] >= r:
+                                    if xml_parsed[r]['note'].note_duration.time_position == 0: # if grace
                                         continue
-                                    elif pairs[r]['score_midi'][0] < r:
-                                        break 
-                                
+                                    else: # only if not grace!
+                                        break   
                             prev_onset = pairs[r]['score_midi'][1].start 
 
                             # if np.abs(score_note.start - xml_note_start) < 1. and \
@@ -504,14 +544,22 @@ def match_xml_to_scoreMIDI(xml_parsed, score_parsed):
                           (arpeggiate score midi notes should start from xml_note_start)
                     '''
                     # find latest non-grace note
+                    # for r in reversed(range(x)):
+                    #     if xml_pos != xml_parsed[r]['note'].x_position and \
+                    #         xml_parsed[r]['note'].is_grace_note == False and \
+                    #         pairs[r]['score_midi'] is not None: # not in onset group
+                    #         if pairs[r]['score_midi'][0] >= r:
+                    #             continue
+                    #         elif pairs[r]['score_midi'][0] < r:
+                    #             break                             
+
                     for r in reversed(range(x)):
                         if xml_pos != xml_parsed[r]['note'].x_position and \
-                            xml_parsed[r]['note'].is_grace_note == False and \
-                            pairs[r]['score_midi'] is not None: # not in onset group
-                            if pairs[r]['score_midi'][0] >= r:
+                            pairs[r]['score_midi'] is not None:
+                            if xml_parsed[r]['note'].note_duration.time_position == 0: # if grace
                                 continue
-                            elif pairs[r]['score_midi'][0] < r:
-                                break                             
+                            else: # only if not grace!
+                                break   
                     prev_onset = pairs[r]['score_midi'][1].start 
 
                     if score_note.start >= np.max([measure_onset, prev_onset]) and \
@@ -539,8 +587,6 @@ def match_xml_to_scoreMIDI(xml_parsed, score_parsed):
 
         pairs.append(pair)    
         print("matched {}th xml note: matched: {} ".format(x, match), end='\r')
-        if match == False:
-            raise AssertionError
         
         # update prev attributes
         prev_measure_number = xml_note.measure_number
@@ -560,7 +606,7 @@ def match_xml_to_scoreMIDI(xml_parsed, score_parsed):
 
     return pairs            
 
-def match_xml_to_scoreMIDI_plain(xml_parsed, score_parsed):
+def match_XML_to_scoreMIDI_plain(xml_parsed, score_parsed):
     # check which measures contains grace notes
     grace_measures = [xml_['note'].measure_number 
         for xml_ in xml_parsed if xml_['note'].is_grace_note == True]
@@ -663,7 +709,7 @@ def match_xml_to_scoreMIDI_plain(xml_parsed, score_parsed):
     return pairs            
 
 def check_alignment_with_1d_plot(
-    xml_parsed, score_parsed, pairs, c_name, p_name):
+    xml_parsed, score_parsed, pairs, s_name):
     # collect aligned indices
     paired_ind = list()
     for pair in pairs:
@@ -772,7 +818,7 @@ def check_alignment_with_1d_plot(
         lines.append(line)
     fig.lines = lines
     plt.tight_layout()
-    plt.savefig("{}.{}.aligned_pair_plot.png".format(c_name, p_name))
+    plt.savefig("{}.aligned_plot.png".format(s_name))
     plt.close()
 
 def match_score_to_performMIDI(
@@ -878,4 +924,55 @@ def make_midi_start_zero(notes):
     return new_notes    
 
 
+def save_changed_midi(
+    filepath, savename=None, save=True, change_tempo=None, change_dynamics=None):
+    # load midi notes
+    notes = extract_midi_notes(filepath)
+    t_ratio = change_tempo
+    d_ratio = change_dynamics
+    # change condition
+    prev_note = None
+    prev_new_note = None
+    new_notes = list()
+    for note in notes:
+        new_onset = note.start 
+        new_offset = note.end 
+        new_vel = note.velocity
+        if change_tempo is not None:
+            dur = note.end - note.start
+            new_dur = dur * t_ratio
+            if prev_note is None: # first note
+                ioi, new_ioi = None, None
+                new_onset = note.start
+                new_offset = note.start + new_dur
+            elif prev_note is not None:
+                ioi = note.start - prev_note.start
+                new_ioi = ioi * t_ratio 
+                new_onset = prev_new_note.start + new_ioi 
+                new_offset = new_onset + new_dur 
+        if change_dynamics is not None:
+            vel = note.velocity
+            new_vel = int(np.round(vel * d_ratio)) 
+            new_vel = np.clip(new_vel, 0, 127)
+        # update new note
+        new_note = pretty_midi.containers.Note(velocity=new_vel,
+                                               pitch=note.pitch,
+                                               start=new_onset,
+                                               end=new_offset)  
+        new_notes.append(new_note)
+        prev_note = note
+        prev_new_note = new_note
+    # new midi
+    midi_new = pretty_midi.PrettyMIDI(resolution=1000, initial_tempo=120) # new midi object
+    inst_new = pretty_midi.Instrument(0) # new instrument object
+    inst_new.notes = make_midi_start_zero(new_notes)
+    midi_new.instruments.append(inst_new)               
+    # append new instrument
+    midi_new.instruments.append(inst_new)
+    midi_new.remove_invalid_notes()
+    
+    if save is True:
+        midi_new.write(savename)
+    
+    return inst_new.notes
 
