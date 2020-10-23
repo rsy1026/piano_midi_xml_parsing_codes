@@ -15,6 +15,11 @@ import matplotlib
 matplotlib.use("agg")
 import matplotlib.pyplot as plt
 
+def ind2str(ind, n):
+    ind_ = str(ind)
+    rest = n - len(ind_)
+    str_ind = rest*"0" + ind_
+    return str_ind 
 
 def remove_files():
     parent_path = '/home/rsy/Dropbox/RSY/Piano/data/chopin_maestro/original'
@@ -49,7 +54,7 @@ def quantize(x, unit=None):
         x_new = x_prev
     elif _prev == _next:
         x_new = x_prev
-    return np.abs(x_new)
+    return np.abs(float(x_new))
 
 def quantize_to_sample(value, unit):
     quantized = quantize(np.round(value, 3), unit=unit)
@@ -328,9 +333,10 @@ def get_cleaned_midi(
     print("{}: {}/{} notes saved --> plain vel: {}".format(
         filename, new_note_num, orig_note_num, no_vel))
 
-def extract_midi_notes(midi_path, clean=True):
+def extract_midi_notes(midi_path, clean=True, no_pedal=False):
     if clean is False:
-        midi_obj = pretty_midi.PrettyMIDI(midi_path)
+        midi_obj = get_cleaned_midi(
+            midi_path, no_vel=False, no_pedal=no_pedal, save=False)
 
     elif clean is True:
         midi_obj = get_cleaned_midi(
@@ -900,6 +906,26 @@ def group_by_measure(pairs):
     measure_groups[prev_measure] = in_measure
     return measure_groups
 
+def get_measure_marker(pair):
+    
+    first_measure_num = pair[0]['xml_note'][1].measure_number +1
+    prev_measure_num = first_measure_num
+    marker = dict()
+
+    marker[first_measure_num] = [pair[0]]
+    for each_note in pair[1:]:
+        xml = each_note['xml_note'][1]
+        measure_num = xml.measure_number + 1
+
+        if prev_measure_num == measure_num: # if in same measure
+            marker[prev_measure_num].append(each_note)                  
+        elif prev_measure_num < measure_num: # if next measure
+            marker[measure_num] = [each_note]
+
+        prev_measure_num = measure_num
+
+    return marker
+
 def save_new_midi(notes, ccs=None, new_midi_path=None):
     new_obj = pretty_midi.PrettyMIDI()
     new_inst = pretty_midi.Instrument(program=0)
@@ -923,7 +949,6 @@ def make_midi_start_zero(notes):
         new_notes.append(new_note)
     return new_notes    
 
-
 def save_changed_midi(
     filepath, savename=None, save=True, change_tempo=None, change_dynamics=None):
     # load midi notes
@@ -941,6 +966,7 @@ def save_changed_midi(
         if change_tempo is not None:
             dur = note.end - note.start
             new_dur = dur * t_ratio
+            new_dur = np.clip(new_dur, 1e-3, 0.025)
             if prev_note is None: # first note
                 ioi, new_ioi = None, None
                 new_onset = note.start
@@ -976,3 +1002,28 @@ def save_changed_midi(
     
     return inst_new.notes
 
+def fade_in_out(
+    wav, fade_in_len=None, fade_out_len=None):
+    # wav is stereo
+    new_wav = np.copy(wav)
+    factor = 0
+    # fade in
+    for ind, sample in enumerate(new_wav):
+        if ind <= fade_in_len:
+            left = sample[0] * factor
+            right = sample[1] * factor
+            factor = (np.exp(ind*1e-3)-1)/(np.exp(fade_in_len*1e-3)-1)
+            new_wav[ind,:] = [left, right]
+        else:
+            break
+    # fade out
+    factor = 0
+    for ind, sample in enumerate(reversed(new_wav)):
+        if ind <= fade_out_len:
+            left = sample[0] * factor
+            right = sample[1] * factor
+            factor = (np.exp(ind*1e-3)-1)/(np.exp(fade_out_len*1e-3)-1)
+            new_wav[-(ind+1),:] = [left, right]
+        else:
+            break
+    return new_wav

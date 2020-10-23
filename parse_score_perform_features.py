@@ -192,13 +192,13 @@ def match_file(xml, score, corresp, perform):
 
 	# match xml to score midi
 	xml_score_pairs = \
-		match_xml_to_scoreMIDI_plain(xml_parsed, score_parsed)
+		match_XML_to_scoreMIDI_plain(xml_parsed, score_parsed)
 	
 	# check_alignment_with_1d_plot(
 	# 	xml_parsed, score_parsed, xml_score_pairs, categ, piece)
 
 	player_path = os.path.dirname(perform)
-	perform_parsed = extract_midi_notes(perform)
+	perform_parsed = extract_midi_notes(perform, clean=False, no_pedal=True)
 	num_perform = len(perform_parsed)
 	corresp_parsed = extract_corresp(corresp, num_score, num_perform)
 	xml_score_perform_pairs = match_score_to_performMIDI(
@@ -209,7 +209,7 @@ def match_file(xml, score, corresp, perform):
 
 
 def save_features_xml():
-	dirname = '/home/rsy/Dropbox/RSY/Piano/data/chopin_maestro/original'
+	dirname = '/data/chopin_maestro/original'
 	categs = sorted(glob(os.path.join(dirname, "*/")))
 	
 	pc = ['C','Db','D','Eb','E','F','F#','G','Ab','A','Bb','B']
@@ -245,6 +245,7 @@ def save_features_xml():
 			for i in range(len(pairs_xml)):
 				xml_note = pairs_xml[i]['xml_note'][1]
 				xml_measure = pairs_xml[i]['xml_measure']	
+				midi_ind = pairs_xml[i]['score_midi'][0]
 
 				# parse features for each note
 				parsed_note = XMLFeatures(note=xml_note,
@@ -259,7 +260,7 @@ def save_features_xml():
 				csv_list.append([])
 				csv_list.append(['<{}th note: measure {}>'.format(i, xml_note.measure_number)])
 				csv_list.append(['> tempo: {}'.format(parsed_note.tempo)])
-				csv_list.append(['> onset: {}'.format(parsed_note.time_position)])
+				csv_list.append(['> onset: {:4f}'.format(parsed_note.time_position)])
 				csv_list.append(['> pitch: {} (pc: {} / octave: {})'.format(
 					parsed_note.pitch_name, parsed_note.pitch_class, parsed_note.octave)])
 				# csv_list.append(['> pitch/normalized_pitch: {}({})/{} (key: {} {})'.format(
@@ -281,25 +282,25 @@ def save_features_xml():
 
 				csv_list.append(["---------------------------------------------------------------------------"])
 				
-				csv_list.append(["--> type input: {}".format(_input[:6])])
-				csv_list.append(["--> dot input: {}".format(_input[6:8])])
-				csv_list.append(["--> staff input: {}".format(_input[8:10])])
-				csv_list.append(["--> grace note input: {}".format(_input[10:12])])
-				csv_list.append(["--> voice input: {}".format(_input[12:16])])
-				csv_list.append(["--> dynamic input: {}".format(_input[16:22])])
-				# csv_list.append(["--> pitch result: {}".format(_input[22:110])])
-				csv_list.append(["--> pitch result 1: pc input: {}".format(_input[22:34])])
-				csv_list.append(["--> pitch result 2: octave input: {}".format(_input[34:42])])
+				csv_list.append(["--> type input: {}".format(_input[1:7])]) # 6 
+				csv_list.append(["--> dot input: {}".format(_input[7:9])]) # 2
+				csv_list.append(["--> staff input: {}".format(_input[9:11])]) # 2
+				csv_list.append(["--> grace note input: {}".format(_input[11:13])]) # 2
+				csv_list.append(["--> voice input: {}".format(_input[13:17])]) # 4
+				csv_list.append(["--> dynamic input: {}".format(_input[17:23])]) # 6
+				csv_list.append(["--> pitch result: {}".format(_input[23:111])]) # 88
+				csv_list.append(["--> pitch result 1: pc input: {}".format(_input[111:123])]) # 12
+				csv_list.append(["--> pitch result 2: octave input: {}".format(_input[123:131])]) # 8
 				# csv_list.append(["--> ornament input: {}".format(_input[42:46])])
 				# csv_list.append(["--> tuplet input: {}".format(_input[46:49])])
-				csv_list.append(["--> tied input: {}".format(_input[42:44])])				
-				csv_list.append(["--> same onset input: {}".format(_input[44:46])])
-				csv_list.append(["--> downbeat input: {}".format(_input[46:])])
+				# csv_list.append(["--> tied input: {}".format(_input[42:44])])				
+				csv_list.append(["--> same onset input: {}".format(_input[131:133])]) # 2
+				# csv_list.append(["--> downbeat input: {}".format(_input[46:])])
 				csv_list.append([])
 				csv_list.append([])
 				
 				# append input list
-				cond_list.append([i, _input])
+				cond_list.append([midi_ind, _input])
 
 				# update previous measure number and onset time 
 				prev_xml_note = parsed_note # InputFeatures object
@@ -492,6 +493,50 @@ def trim_length_pairs(pairs, sec=None):
 	min_ind = np.min([n["score_midi"][0] for n in onset])
 	return min_ind
 
+
+def parse_test_cond(pair=None, pair_path=None):
+	if pair is not None:
+		pairs = pair 
+	elif pair is None and pair_path is not None:
+		pairs = np.load(pair_path).tolist()
+
+	pairs_xml = [p for p in pairs if p['xml_note'] is not None]
+	pairs_xml = sorted(pairs_xml, key=lambda x: x['xml_note'][0])
+
+	# PARSE FEATURES
+	cond_list = list()
+	note_list = list()
+	csv_list = list()
+	prev_xml_note = None
+	prev_xml_measure = None
+	for i in range(len(pairs_xml)):
+		xml_note = pairs_xml[i]['xml_note'][1]
+		xml_measure = pairs_xml[i]['xml_measure']	
+		midi_ind = pairs_xml[i]['score_midi'][0]
+
+		# parse features for each note
+		parsed_note = XMLFeatures(note=xml_note,
+								  measure=xml_measure,
+								  prev_note=prev_xml_note,
+								  prev_measure=prev_xml_measure,
+								  note_ind=i)
+
+		_input = parsed_note._input
+		
+		# append input list
+		cond_list.append([midi_ind, _input])
+
+		# update previous measure number and onset time 
+		prev_xml_note = parsed_note # InputFeatures object
+		prev_xml_measure = parsed_note.measure # xml object
+
+	cond_list = np.asarray(cond_list)
+	cond_list = sorted(cond_list, key=lambda x: x[0])
+	cond = np.asarray([c[1] for c in cond_list])
+
+	return cond
+
+
 def parse_test_x_features(midi_path, quarter=None, sec=None):
 
 	midi_notes = extract_midi_notes(midi_path)
@@ -518,15 +563,21 @@ def parse_test_x_features(midi_path, quarter=None, sec=None):
 		quarter = float(q)
 	
 	dur_16th = Decimal(str(quarter)) / 4
+	min_dur = dur_16th / 4
 
 	# set start to 0
 	first_onset = midi_notes[0].start
 	for note in midi_notes:
 		note.start -= first_onset
 		note.end -= first_onset
+		note.start = quantize(note.start, unit=float(min_dur))
+		note.end = quantize(note.end, unit=float(min_dur))
 	
 	# group into onset
-	sub_notes = trim_length(midi_notes, sec=sec)
+	if sec is not None:
+		sub_notes = trim_length(midi_notes, sec=sec)
+	else:
+		sub_notes = midi_notes
 
 	input_list = list()
 	prev_note = None
@@ -565,15 +616,13 @@ def parse_test_x_features(midi_path, quarter=None, sec=None):
 
 	return input_list, sub_notes, quarter
 
-def parse_test_y_features(parent_dir, xml, score, perform):
+def parse_test_y_features(xml, score, perform, corresp=None):
 
 	# get xml_score_perform_pairs
-	midi_name = os.path.basename(perform).split(".")[0]
-	corresp_path = os.path.join(
-		parent_dir, '{}.perform.cleaned_corresp.txt'.format(midi_name))
-	if not os.path.exists(corresp_path):
+	parent_dir = os.path.dirname(perform)
+	if corresp is None:
 		make_corresp_file(parent_dir, perform, score)
-	corresp = corresp_path
+
 	pairs = match_file(xml, score, corresp, perform)
 
 	pairs_score = [p for p in pairs if p['score_midi'] is not None]
@@ -1522,8 +1571,8 @@ class XMLFeatures(object):
 		_pitch_class[self.pitch_class] = 1
 		_octave[self.octave] = 1
 		_pitch2 = np.concatenate([_pitch_class, _octave], axis=-1)
-		# _pitch = np.zeros([88,])
-		# _pitch[int(self.pitch-21)] = 1
+		_pitch = np.zeros([88,])
+		_pitch[int(self.pitch-21)] = 1
 		# # ornament
 		# _ornament = np.zeros([4,])
 		# for i, key in enumerate(sorted(self.ornament)):
@@ -1554,16 +1603,16 @@ class XMLFeatures(object):
 		assert np.sum(_same_onset) == 1
 		assert np.sum(_pitch_class) == 1
 		assert np.sum(_octave) == 1
-		# assert np.sum(_pitch) == 1
+		assert np.sum(_pitch) == 1
 		# assert np.sum(_ornament) == 1
 		# assert np.sum(_tuplet) == 1
 		assert np.sum(_tied) == 1
 
 		# concatenate all features into one vector 
-		# self._input = np.concatenate(
-			# [_type, _dot, _staff, _grace, _voice, _dynamics, 
-			# _pitch2, _same_onset], axis=-1)
-		self._input = np.concatenate([_tempo, _dynamics], axis=-1)
+		self._input = np.concatenate(
+			[_tempo, _type, _dot, _staff, _grace, _voice, _dynamics, 
+			_pitch, _pitch2, _same_onset], axis=-1)
+		# self._input = np.concatenate([_tempo, _dynamics], axis=-1)
 
 	def get_tempo(self):
 		if len(self.current_directions) > 0:
@@ -1634,9 +1683,9 @@ class XMLFeatures(object):
 			for direction in self.current_directions:
 				'''
 						ff (staff 1-above)
-				staff 1 =================
+				staff 1 ==================
 						ff (staff 1-below / staff 2-above)
-				staff 2 =================
+				staff 2 ==================
 						ff (staff 2-below)
 				'''
 				_staff = int(direction.staff) # staff position of the direction
@@ -1654,12 +1703,12 @@ class XMLFeatures(object):
 							_dynamic = content 
 						else: # other dynamics other than basic ones
 							if content == "fp":
-								# _dynamic = "f" 
-								_dynamic = "p" 
+								_dynamic = "f" 
+								# _dynamic = "p" 
 								_next_dynamic = "p"
 							elif content == "ffp":
-								# _dynamic = "ff" 
-								_dynamic = "p" 
+								_dynamic = "ff" 
+								# _dynamic = "p" 
 								_next_dynamic = "p"
 							elif content == "ppp":
 								_dynamic = "pp"

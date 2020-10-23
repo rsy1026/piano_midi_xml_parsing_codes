@@ -51,7 +51,7 @@ def save_cleaned_midi(
         filename, new_note_num, orig_note_num, no_vel))
 
 def copy_scores_for_players(parent_path, groups):
-    xml_files = np.asarray(sorted(glob(os.path.join(parent_path, '*.plain.xml'))))
+    # xml_files = np.asarray(sorted(glob(os.path.join(parent_path, '*.plain.xml'))))
     score_files = np.asarray(sorted(glob(os.path.join(parent_path, '*.plain.mid'))))
 
     for group in groups:
@@ -60,8 +60,8 @@ def copy_scores_for_players(parent_path, groups):
         for file in perform_files:
             pl_name = '.'.join(os.path.basename(file).split(".")[:-3])
             # p_name = pl_name.split("_")[0]
-            xml_file = [xml_ for xml_ in xml_files 
-                if '.'.join(os.path.basename(xml_).split('.')[:-2]) in pl_name][0]
+            # xml_file = [xml_ for xml_ in xml_files 
+                # if '.'.join(os.path.basename(xml_).split('.')[:-2]) in pl_name][0]
             score_file = [score_ for score_ in score_files 
                 if '.'.join(os.path.basename(score_).split('.')[:-2]) in pl_name][0]
 
@@ -70,8 +70,8 @@ def copy_scores_for_players(parent_path, groups):
             # print(score_file)
             # print()
 
-            shutil.copy(xml_file, os.path.join(
-                group, "{}.plain.xml".format(pl_name)))
+            # shutil.copy(xml_file, os.path.join(
+                # group, "{}.plain.xml".format(pl_name)))
             shutil.copy(score_file, os.path.join(
                 group, "{}.plain.mid".format(pl_name)))
             print("saved xml/score file for {}/{}".format(g_name, pl_name))
@@ -138,22 +138,25 @@ def score_perform_matches(groups):
         for pm, sm in zip(perform_mids, score_mids):
             _perform = os.path.basename(pm).split('.')[0]
             _score = os.path.basename(sm).split('.')[0]
-            assert _perform == _score
+            # assert _perform == _score
             if not os.path.exists(os.path.join(g, _perform+'.perform.cleaned_corresp.txt')):
                 make_corresp(_score+'.plain', _perform+'.perform.aligned.cleaned', './MIDIToMIDIAlign.sh')
                 names = pm.split('/')
                 print('saved corresp file for {}:{}: player {}'.format(names[-4],names[-3],names[-2]))
                 print()
 
-def score_perform_match(perform_path, score_path):
+def score_perform_match(perform_path, score_path, _perform=None, _score=None):
     savepath = os.path.dirname(perform_path)
-    _perform = os.path.basename(perform_path).split('.')[0]
-    _score = os.path.basename(score_path).split('.')[0]
+    if _perform == None:
+        _perform = os.path.basename(perform_path).split('.')[0]
+    if _score == None:
+        _score = os.path.basename(score_path).split('.')[0]
     score_savename = os.path.join(savepath, "{}.score.cleaned.mid".format(_score))
     perform_savename = os.path.join(savepath, "{}.perform.cleaned.mid".format(_perform))
     save_cleaned_midi(score_path, score_savename, no_vel=True, no_pedal=False)
     save_cleaned_midi(perform_path, perform_savename, no_vel=False, no_pedal=False)
-    assert _perform == _score
+    # assert _perform == _score
+    os.chdir(savepath)  
     if not os.path.exists(os.path.join(savepath, _perform+'.perform.cleaned_corresp.txt')):
         make_corresp(_score+'.score.cleaned', _perform+'.perform.cleaned', './MIDIToMIDIAlign.sh')
         # erase all resulted files but corresp file
