@@ -19,7 +19,7 @@ import soundfile as sf
 
 from musicxml_parser import MusicXMLDocument
 from parse_utils import *
-from nakamura_match_by_file import *
+from nakamura_match import *
 
 
 '''
@@ -65,10 +65,14 @@ class XML_SCORE_PERFORM_MATCH(object):
         self.save_dir = save_dir
         self.program_dir = program_dir
 
-    def align_wav_midi(self, wav, pmid):
+    def align_wav_midi(self, wav, pmid, name=None):
+        if name is None:
+            name = self.perform_name
+        elif name is not None:
+            name = name
         # for wav in wavs:
         save_name = os.path.join(
-            self.save_dir, "{}.perform.aligned.mid".format(self.perform_name))
+            self.save_dir, "{}.aligned.mid".format(name))
         # align
         if not os.path.exists(save_name):
             subprocess.call(
