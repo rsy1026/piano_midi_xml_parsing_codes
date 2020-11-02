@@ -15,7 +15,7 @@ from decimal import Decimal
 # import matplotlib.pyplot as plt
 # import seaborn as sns
 
-import soundfile as sf
+# import soundfile as sf
 
 from musicxml_parser import MusicXMLDocument
 from parse_utils import *
@@ -59,9 +59,11 @@ from nakamura_match import *
 
 class XML_SCORE_PERFORM_MATCH(object):
     def __init__(self, 
+                 current_dir=None,
                  save_dir=None,
                  program_dir=None):
 
+        self.current_dir = current_dir
         self.save_dir = save_dir
         self.program_dir = program_dir
 
@@ -93,8 +95,9 @@ class XML_SCORE_PERFORM_MATCH(object):
         ### SCORE MIDI - PERFORM MIDI ### 
         corresp = save_corresp_file(
             pmid2, smid, self.program_dir, self.save_dir) 
-        os.chdir(self.program_dir)
+        os.chdir(self.current_dir)
         print("** aligned score midi-perform midi! **          ")
+        assert os.path.exists(corresp)
 
         ### SCORE XML - SCORE MIDI ### 
         # load xml object 
