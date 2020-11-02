@@ -53,12 +53,13 @@ def save_corresp_file(perform, score, tool_path, save_path, remove_cleaned=False
     p_name = os.path.basename(perform).split('.')[0]
     s_name = os.path.basename(score).split('.')[0]
     assert p_name == s_name # make sure same filenames
-    # temporally save cleaned midi
-    get_cleaned_midi(perform, perform_savename, no_vel=False, no_pedal=True)
-    get_cleaned_midi(score, score_savename, no_vel=True, no_pedal=True)
-    # save corresp file
     corresp_path = os.path.join(save_path, '{}.cleaned_corresp.txt'.format(_perform))
+    
     if not os.path.exists(corresp_path):
+        # temporally save cleaned midi
+        get_cleaned_midi(perform, perform_savename, no_vel=False, no_pedal=True)
+        get_cleaned_midi(score, score_savename, no_vel=True, no_pedal=True)
+        # save corresp file
         os.chdir(os.path.dirname(perform))
         make_corresp(_score+".cleaned", _perform+".cleaned", './MIDIToMIDIAlign.sh')
         # erase all resulted files but corresp file
