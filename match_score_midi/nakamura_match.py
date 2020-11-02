@@ -43,19 +43,19 @@ def copy_scores_for_perform(perform_file, score_files, xml_files, p_name):
     print("saved xml/score file for {}".format(p_name))
 
 def save_corresp_file(perform, score, tool_path, save_path, remove_cleaned=False):
-    # copy if cannot access to alignment tools
-    copy_alignment_tools(tool_path, save_path)
     # get filenames 
     _perform = '.'.join(os.path.basename(perform).split('.')[:-1])
     _score = '.'.join(os.path.basename(score).split('.')[:-1])
-    perform_savename = os.path.join(save_path, "{}.cleaned.mid".format(_perform))
-    score_savename = os.path.join(save_path, "{}.cleaned.mid".format(_score))
     p_name = os.path.basename(perform).split('.')[0]
     s_name = os.path.basename(score).split('.')[0]
     assert p_name == s_name # make sure same filenames
     corresp_path = os.path.join(save_path, '{}.cleaned_corresp.txt'.format(_perform))
-    
+
     if not os.path.exists(corresp_path):
+        # copy if cannot access to alignment tools
+        copy_alignment_tools(tool_path, save_path)
+        perform_savename = os.path.join(save_path, "{}.cleaned.mid".format(_perform))
+        score_savename = os.path.join(save_path, "{}.cleaned.mid".format(_score))
         # temporally save cleaned midi
         get_cleaned_midi(perform, perform_savename, no_vel=False, no_pedal=True)
         get_cleaned_midi(score, score_savename, no_vel=True, no_pedal=True)
