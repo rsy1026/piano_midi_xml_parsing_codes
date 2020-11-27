@@ -105,7 +105,7 @@ class XML_SCORE_PERFORM_MATCH(object):
 
         return xml_score_perform_pairs
 
-    def __call__(self, smid, pmid, xml, wav=None, corresp=None, filename=None):
+    def __call__(self, xml, smid, pmid, wav=None, corresp=None, filename=None):
 
         score = smid 
 
