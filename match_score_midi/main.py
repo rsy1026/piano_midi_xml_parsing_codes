@@ -67,97 +67,99 @@ class XML_SCORE_PERFORM_MATCH(object):
         self.save_dir = save_dir
         self.program_dir = program_dir
 
-    def align_wav_midi(self, wav, pmid, name=None):
-        if name is None:
-            name = self.perform_name
-        elif name is not None:
-            name = name
+    def align_wav_midi(self, wav, pmid, filename=None):
+
         # for wav in wavs:
         save_name = os.path.join(
-            self.save_dir, "{}.aligned.mid".format(name))
+            self.save_dir, "{}.aligned.mid".format(filename))
         # align
         if not os.path.exists(save_name):
             subprocess.call(
                 ['python3', 'align_midi.py', wav, pmid, save_name])
         return save_name
 
-    def __call__(self, smid, pmid, xml, wav=None, name=None):
-
-        ### PERFORM WAV - PERFORM MIDI ### 
-        self.perform_name = name
-
-        if wav is not None:
-            pmid2 = self.align_wav_midi(wav, pmid)
-            print("** aligned wav! **                          ")
-        else:
-            pmid2 = pmid
-
-        ### SCORE MIDI - PERFORM MIDI ### 
-        corresp = save_corresp_file(
-            pmid2, smid, self.program_dir, self.save_dir) 
-        os.chdir(self.current_dir)
-        print("** aligned score midi-perform midi! **          ")
-        assert os.path.exists(corresp)
-
-        ### SCORE XML - SCORE MIDI ### 
+    def align_xml_midi(self, xml, score, perform, corresp, plot=False):
+        
         # load xml object 
         XMLDocument = MusicXMLDocument(xml)
         # extract all xml/midi score notes 
         xml_parsed = extract_xml_notes(XMLDocument)
-        score_parsed, _ = extract_midi_notes(smid, clean=True) 
+        score_parsed, _ = extract_midi_notes(score, clean=True) 
         num_score = len(score_parsed)
         # match score xml to score midi
         xml_score_pairs = \
             match_XML_to_scoreMIDI_plain(xml_parsed, score_parsed)
         print("** aligned score xml-score midi! **             ")
         
-        check_alignment_with_1d_plot(
-          xml_parsed, score_parsed, xml_score_pairs, self.perform_name)
+        if plot is True:
+            check_alignment_with_1d_plot(
+              xml_parsed, score_parsed, xml_score_pairs, self.perform_name)
 
         # match score pairs with perform midi
-        perform_parsed, _ = extract_midi_notes(pmid2, clean=False, no_pedal=True)
+        perform_parsed, _ = extract_midi_notes(perform, clean=False, no_pedal=True)
         num_perform = len(perform_parsed)
         corresp_parsed = extract_corresp(corresp, num_score, num_perform)
         xml_score_perform_pairs = match_score_to_performMIDI(
             xml_score_pairs, corresp_parsed, perform_parsed, score_parsed, xml_parsed)   
         print("** aligned score xml-score midi-perform midi! **")    
 
-        return xml_score_perform_pairs, pmid2
+        return xml_score_perform_pairs
+
+    def __call__(self, smid, pmid, xml, wav=None, corresp=None, filename=None):
+
+        score = smid 
+
+        if wav is not None:
+            ### PERFORM WAV - PERFORM MIDI ### 
+            perform = self.align_wav_midi(wav, pmid, filename=filename)
+            print("** aligned wav! **                          ")
+        else:
+            perform = pmid
+
+        ### SCORE MIDI - PERFORM MIDI ### 
+        if corresp is None:
+            corresp = save_corresp_file(
+                perform, score, self.program_dir, self.save_dir) 
+            os.chdir(self.current_dir)
+            print("** aligned score midi-perform midi! **          ")
+        elif corresp is not None:
+            assert os.path.exists(corresp)
+
+        ### SCORE XML - SCORE MIDI - PERFORM MIDI ### 
+        pairs = self.align_xml_midi(xml, score, perform, corresp)  
+
+        return pairs, perform
 
 
-def split_wav_by_measure(
-    wav_path, mid_path, pair, save_path, split_by_measure=None, split_by_note=None,
+def split_by_structure(
+    mid_path, pair, filename, save_path, wav_path=None, 
+    split_by_measure=None, split_by_note=None,
     fade_in=1e-4, fade_out=1e-3, dtype="float32", subtype="PCM_32"):
 
-    if wav_path is not None:
-        wav, sr = sf.read(wav_path, dtype=dtype) # stereo
-    else:
-        wav = None
-
+    # load midi
     mid, ccs = extract_midi_notes(mid_path, clean=False, no_pedal=False)
-    # sort pair based on xml notes' order 
+    # sort pair based on xml notes or score notes
     pair = [p for p in pair if p["xml_note"] is not None]
-    pair_ = sorted(pair, key=lambda x: x["xml_note"][0])
+    pair_xml = sorted(pair, key=lambda x: x["xml_note"][0])
     pair_score = sorted(pair, key=lambda x: x["score_midi"][0])
-    marker = get_measure_marker(pair_)
+    # get marker
+    marker = get_measure_marker(pair_xml)
+    max_key = np.max(list(marker.keys()))
+    # initiate
     start_measure, end_measure = None, None
     start_note, end_note = None, None
+    split_indices = list()
 
-    f_name = '.'.join(os.path.basename(mid_path).split('.')[:1])
-    f_name2 = '.'.join(os.path.basename(mid_path).split('.')[1:-1])
-    max_key = np.max(list(marker.keys()))
-
-    # split all measures:
-    if split_by_measure is None and split_by_note is None: 
-        print("splitting all measures...")
-
+    ### GET TARGET INDICES ###
+    # split all measures
+    if split_by_measure == "all": 
+        
         for measure in marker:
-            same_measure_midi = list()
-            same_measure_wav = list()
+            # get start onset 
             notes = marker[measure]
-            all_onsets = [n["perform_midi"][1].start \
-                for n in notes if n["perform_midi"] is not None]
-            first_onset = np.min(all_onsets)
+            start_onset = np.min([n["perform_midi"][1].start \
+                for n in notes if n["perform_midi"] is not None])
+            # get end onset
             try:
                 all_next_onsets = list()
                 add = 0
@@ -166,49 +168,31 @@ def split_wav_by_measure(
                     all_next_onsets = [n["perform_midi"][1].start \
                         for n in next_notes if n["perform_midi"] is not None]
                     add += 1
-                next_measure_onset = np.min(all_next_onsets)
+                end_onset = np.min(all_next_onsets)
 
             except KeyError:
                 if measure == max_key:
-                    next_measure_onset = len(wav) / sr
+                    end_onset = None
                 else:
                     raise AssertionError 
 
-            # split midi 
-            for note in mid:
-              if note.start >= first_onset and note.start < next_measure_onset:
-                  same_measure_midi.append(note)
-              else:
-                  continue
-            measure_midi = make_midi_start_zero(same_measure_midi)
-            # save splitted midi
-            save_new_midi(measure_midi, new_midi_path=os.path.join(
-                save_path, "{}.measure{}.mid".format(f_name, measure+1)))
+            split_indices.append([start_onset, end_onset, 
+                "measure{}-{}".format(measure, measure+1+add)])
 
-            if wav is not None:
-                first_sample = int(np.round(first_onset / (1/sr)))
-                next_sample = int(np.round(next_measure_onset / (1/sr)))
-                same_measure_wav = wav[first_sample:next_sample]
+        print("splitting all measures...")
 
-                # fade-in and fade-out
-                if start_measure == 1:
-                    fade_in_len = None
-                else:
-                    fade_in_len = int(sr * fade_in)
-                fade_out_len = int(sr * fade_out)
-                fade_wav = fade_in_out(same_measure_wav, fade_in_len=fade_in_len, fade_out_len=fade_out_len)
-                # save splitted audio 
-                sf.write(os.path.join(
-                    save_path, '{}.measure{}.wav'.format(f_name, measure)), 
-                    fade_wav, sr, subtype=subtype)
+    # split measures in part
+    elif split_by_measure is not None and split_by_measure != "all":
 
-    elif split_by_measure is not None or split_by_note is not None:
-        if split_by_measure is not None:
+        # split particular measures
+        if split_by_measure is not None and split_by_note is None:
+            # get boundaries
             start_measure, end_measure = [int(m) for m in split_by_measure]
+            # get start onset 
             notes = marker[start_measure]
-            all_onsets = [n["perform_midi"][1].start \
-                for n in notes if n["perform_midi"] is not None]
-            first_onset = np.min(all_onsets)
+            start_onset = np.min([n["perform_midi"][1].start \
+                for n in notes if n["perform_midi"] is not None])
+            # get end onset
             try:
                 all_next_onsets = list()
                 add = 0
@@ -217,95 +201,120 @@ def split_wav_by_measure(
                     all_next_onsets = [n["perform_midi"][1].start \
                         for n in next_notes if n["perform_midi"] is not None]
                     add += 1
-                next_measure_onset = np.min(all_next_onsets) 
+                end_onset = np.min(all_next_onsets) 
 
             except KeyError:
                 if measure == max_key:
-                    next_measure_onset = len(wav) / sr
+                    end_onset = None
                 else:
                     raise AssertionError 
 
-            print("splitting measures from {} to {}...".format(
-                start_measure, end_measure))
+            split_indices.append([start_onset, end_onset, 
+                "measure{}-{}".format(measure, measure+1+add)])
 
-        if split_by_note is not None:
+            print("splitting measures from {} to {}...".format(start_measure, end_measure))  
+
+        # split particular notes
+        elif split_by_note is not None:
+            # get boundaries
             start_note, end_note = [int(m) for m in split_by_note]
-            all_onsets = [n["perform_midi"][1].start \
-                for n in pair_score if n["score_midi"][1].start==pair_score[start_note]["score_midi"][1].start \
-                and n["perform_midi"] is not None]
-            first_onset = np.min(all_onsets)
+            # get start onset 
+            '''
+            find minimum perform onset among onsets that have the corresponding score onset 
+            the same to that of the start note 
+            '''
+            start_onset = np.min([n["perform_midi"][1].start for n in pair_score \
+                if n["score_midi"][1].start==pair_score[start_note]["score_midi"][1].start \
+                and n["perform_midi"] is not None])
+            # get end onset
+            '''
+            find minimum perform onset among onsets that have the corresponding score onset 
+            the same to that of "the next note" of the end note 
+            '''
             all_next_onsets = list()
             add = 0
             while len(all_next_onsets) == 0:
                 next_note = pair_score[end_note+1+add]
-                assert next_note["score_midi"][1].start > pair_score[end_note]["score_midi"][1].start
-                all_next_onsets = [n["perform_midi"][1].start \
-                    for n in pair_score if n["score_midi"][1].start==next_note["score_midi"][1].start]
+                # assert next_note["score_midi"][1].start > pair_score[end_note]["score_midi"][1].start
+                all_next_onsets = [n["perform_midi"][1].start for n in pair_score \
+                    if n["score_midi"][1].start==next_note["score_midi"][1].start]
                 add += 1
-            next_measure_onset = np.min(all_next_onsets)
+            end_onset = np.min(all_next_onsets)
 
-            print("splitting notes from {} to {}...".format(
-                    start_note, end_note))
+            split_indices.append([start_onset, end_onset, 
+                "note{}-{}".format(start_note, end_note+1+add)])
 
-        same_measure_midi = list()
-        same_measure_wav = list()
-        same_measure_cc = list()
+            print("splitting notes from {} to {}...".format(start_note, end_note))    
 
-        # split midi 
-        first_onset_ = quantize(float(Decimal(str(first_onset))), unit=0.00005)
-        next_measure_onset_ = quantize(float(Decimal(str(next_measure_onset))), unit=0.00005)
-        # first_onset_ = first_onset 
-        # next_measure_onset_ = next_measure_onset
+
+    ### SPLIT ### 
+    if wav is not None:
+        wav, sr = sf.read(wav_path, dtype=dtype) # stereo
+
+    for start_onset, end_onset, name in split_indices:
+
+        # start_onset_ = quantize(float(Decimal(str(start_onset))), unit=0.00005)
+        # end_onset_ = quantize(float(Decimal(str(end_onset))), unit=0.00005)
+        start_onset_ = start_onset 
+        end_onset_ = end_onset
+        same_part_note = list()
+        same_part_cc = list()
+
+        ### SPLIT MIDI ### 
+        # get notes in the same part
         for note in mid:
-          if note.start >= first_onset_ and note.start < next_measure_onset_:
-              same_measure_midi.append(note)
+          if note.start >= start_onset_ and note.start < end_onset_:
+              same_part_note.append(note)
           else:
               continue
+        # get ccs in the same part
         if len(ccs) > 0:
             for cc in ccs:
-              if cc.time >= first_onset_ and cc.time < next_measure_onset_:
-                  same_measure_cc.append(cc)
+              if cc.time >= start_onset_ and cc.time < end_onset_:
+                  same_part_cc.append(cc)
               else:
                   continue   
         else: 
-            same_measure_cc = None         
+            same_part_cc = None         
 
-        if start_measure == 1 or start_note == 1:
-            measure_midi = same_measure_midi
+        if start_measure == 1 or start_note == 1: # if very start
+            part_midi = same_part_note
         else: 
-            measure_midi = make_midi_start_zero(same_measure_midi)
+            part_midi = make_midi_start_zero(same_part_note) # make start zero
 
         # save splitted midi
-        # new_midi_path = os.path.join(
-        #     save_dir, "{}.measure{}-{}.mid".format(f_name, start_measure, end_measure))
-        new_midi_path = os.path.join(
-            save_dir, "{}.short.{}.mid".format(f_name, f_name2))
-        save_new_midi(measure_midi, ccs=same_measure_cc, 
+        new_midi_path = os.path.join(save_dir, "{}.{}.mid".format(filename, name))
+        save_new_midi(part_midi, ccs=same_part_cc, 
             new_midi_path=new_midi_path, start_zero=False)
-        print("saved splitted mid for {}".format(f_name))
+        print("saved splitted midi for {}".format(filename))
 
+        ### SPLIT AUDIO ###
         if wav is not None:
-            first_sample = int(np.round(first_onset / (1/sr)))
-            next_sample = int(np.round(next_measure_onset / (1/sr)))
-            same_measure_wav = wav[first_sample:next_sample]
-            # print(same_measure_midi)
-            print("RESULT: splitting from {} to {}...".format(start_measure, end_measure+add-1))
-            print("first_onset: {:.3f} / next_measure_onset: {:.3f}".format(first_onset, next_measure_onset))
-            print("samples length: {} / non-zero: {}".format(len(same_measure_wav), np.sum(np.abs(same_measure_wav))>0))
-            print(save_dir)
+
+            start_sample = int(np.round(start_onset / (1/sr)))
+            end_sample = int(np.round(end_onset / (1/sr)))
+            same_part_wav = wav[start_sample:end_sample]
+    
+            print(">RESULT: ")
+            print("  --> start_onset: {:.3f} / end_onset: {:.3f}".format(start_onset, end_onset))
+            print("  --> sample length: {} / non-zero: {}".format(
+                len(same_part_wav), np.sum(np.abs(same_part_wav))>0))
+            print("  --> save at {}".format(save_dir))
 
             # fade-in and fade-out
-            if start_measure == 1:
+            if start_measure == 1 or start_note == 1:
                 fade_in_len = None
             else:
                 fade_in_len = int(sr * fade_in)
             fade_out_len = int(sr * fade_out)
-            fade_wav = fade_in_out(same_measure_wav, fade_in_len=fade_in_len, fade_out_len=fade_out_len)
+            fade_wav = fade_in_out(same_part_wav, 
+                fade_in_len=fade_in_len, fade_out_len=fade_out_len)
             # save splitted audio 
             sf.write(os.path.join(
-                save_dir, '{}.measure{}-{}.wav'.format(f_name, start_measure, end_measure)), 
+                save_dir, '{}.{}.wav'.format(filename, name)), 
                 fade_wav, sr, subtype=subtype)
-            print("saved splitted audio for {}".format(f_name))
+            print("saved splitted audio for {}".format(filename))
+
 
 
 def main(wav_paths=None, 

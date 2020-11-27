@@ -22,25 +22,27 @@ def ind2str(ind, n):
     return str_ind 
 
 def remove_files():
-    parent_path = '/home/rsy/Dropbox/RSY/Piano/data/chopin_maestro/original'
-    categs = sorted(glob(os.path.join(parent_path, '*/')))
-    for c in categs:
-        pieces = sorted(glob(os.path.join(c, '*/')))
-        for p in pieces:
-            p = pieces[12]
-            players = sorted(glob(os.path.join(p, '*/')))
-            # npy_files = sorted(glob(os.path.join(p, 'inp.npy')))
-            # for a in npy_files:
-                # os.remove(a)
-            for pl in players:
-                txt_files = sorted(glob(os.path.join(pl, '*.txt')))
-                # npy_files = sorted(glob(os.path.join(pl, 'oup.npy')))
-                # xml_files = sorted(glob(os.path.join(pl, '*.xml')))
-                mid_files = sorted(glob(os.path.join(pl, '*.cleaned.mid')))
-                # all_files = txt_files + npy_files + xml_files + mid_files
-                all_files = txt_files + mid_files
-                for a in all_files:
-                    os.remove(a)
+    # parent_path = '/home/rsy/Dropbox/RSY/Piano/data/chopin_maestro/original'
+    parent_path = '/data/chopin_cleaned/original/Chopin_Etude'
+    pieces = sorted(glob(os.path.join(parent_path, '*/')))
+    # for c in categs:
+    #     pieces = sorted(glob(os.path.join(c, '*/')))
+    for p in pieces:
+        # p = pieces[12]
+        players = sorted(glob(os.path.join(p, '*/')))
+        npy_files = sorted(glob(os.path.join(p, '*.npy')))
+        for a in npy_files:
+            os.remove(a)
+        for pl in players:
+            txt_files = sorted(glob(os.path.join(pl, '*.txt')))
+            npy_files = sorted(glob(os.path.join(pl, '*.npy')))
+            # xml_files = sorted(glob(os.path.join(pl, '*.xml')))
+            mid_files = sorted(glob(os.path.join(pl, '*.cleaned.mid')))
+            mid_files += sorted(glob(os.path.join(pl, 'score_ref.mid')))
+            # all_files = txt_files + npy_files + xml_files + mid_files
+            all_files = txt_files + mid_files + npy_files
+            for a in all_files:
+                os.remove(a)
 
 def quantize(x, unit=None):
     div = x // unit
@@ -929,8 +931,8 @@ def get_measure_marker(pair):
 
     return marker
 
-def save_new_midi(notes, ccs=None, new_midi_path=None, start_zero=False):
-    new_obj = pretty_midi.PrettyMIDI(resolution=10000, initial_tempo=120)
+def save_new_midi(notes, ccs=None, new_midi_path=None, initial_tempo=120, start_zero=False):
+    new_obj = pretty_midi.PrettyMIDI(resolution=10000, initial_tempo=initial_tempo)
     new_inst = pretty_midi.Instrument(program=0)
     if start_zero is True:
         notes_ = make_midi_start_zero(notes)

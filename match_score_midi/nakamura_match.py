@@ -48,7 +48,7 @@ def save_corresp_file(perform, score, tool_path, save_path, remove_cleaned=False
     _score = '.'.join(os.path.basename(score).split('.')[:-1])
     p_name = os.path.basename(perform).split('.')[0]
     s_name = os.path.basename(score).split('.')[0]
-    assert p_name == s_name # make sure same filenames
+    # assert p_name == s_name # make sure same filenames
     corresp_path = os.path.join(save_path, '{}.cleaned_corresp.txt'.format(_perform))
 
     if not os.path.exists(corresp_path):
