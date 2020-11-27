@@ -78,7 +78,7 @@ class XML_SCORE_PERFORM_MATCH(object):
                 ['python3', 'align_midi.py', wav, pmid, save_name])
         return save_name
 
-    def align_xml_midi(self, xml, score, perform, corresp, plot=False):
+    def align_xml_midi(self, xml, score, perform, corresp, plain=True, plot=False):
         
         # load xml object 
         XMLDocument = MusicXMLDocument(xml)
@@ -87,8 +87,13 @@ class XML_SCORE_PERFORM_MATCH(object):
         score_parsed, _ = extract_midi_notes(score, clean=True) 
         num_score = len(score_parsed)
         # match score xml to score midi
-        xml_score_pairs = \
-            match_XML_to_scoreMIDI_plain(xml_parsed, score_parsed)
+        if plain is True:
+            xml_score_pairs = \
+                match_XML_to_scoreMIDI_plain(xml_parsed, score_parsed)
+        elif plain is False:
+            xml_score_pairs = \
+                match_XML_to_scoreMIDI(xml_parsed, score_parsed)
+
         print("** aligned score xml-score midi! **             ")
         
         if plot is True:
