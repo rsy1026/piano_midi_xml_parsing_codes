@@ -912,8 +912,7 @@ def group_by_measure(pairs):
     return measure_groups
 
 def get_measure_marker(pair):
-    
-    first_measure_num = pair[0]['xml_note'][1].measure_number +1
+    first_measure_num = pair[0]['xml_note'][1].measure_number + 1
     prev_measure_num = first_measure_num
     marker = dict()
 
@@ -1068,7 +1067,23 @@ def trim_length_pairs(pairs, sec=None):
             break 
     min_ind = np.min([n["score_midi"][0] for n in onset])
     return min_ind
-    
+
+def make_onset_pairs(pairs):
+    pairs = sorted(pairs, key=lambda x: x['score_midi'][0])
+    same_onset = [pairs[0]]
+    onset_list = list()
+    prev_onset = pairs[0]['score_midi'][1].start
+    for pair in pairs[1:]:
+        onset = pair['score_midi'][1].start 
+        if onset == prev_onset:
+            same_onset.append(pair)
+        elif onset > prev_onset:
+            onset_list.append(same_onset)
+            same_onset = [pair]
+        prev_onset = onset
+    onset_list.append(same_onset)            
+    return onset_list
+
 def save_stacked_midi():
     parent_path = "/home/seungyeon/Piano/sarah/recording_data/"
     dirname = "sarah_tone_data"
