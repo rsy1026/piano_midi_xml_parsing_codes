@@ -1037,6 +1037,38 @@ def fade_in_out(
             break
     return new_wav
 
+def trim_length(midi_notes, sec=None):
+    onset_group = list()
+    same_onset = [midi_notes[0]]
+    prev = -1
+    for note in midi_notes[1:]:
+        if note.start > prev:
+            onset_group.append(same_onset)
+            same_onset = [note]
+        elif note.start == prev:
+            same_onset.append(note)
+        prev = note.start
+    onset_group.append(same_onset)
+    # trim to given seconds long
+    sub_notes = list()
+    for onset in onset_group:
+        if onset[0].start < sec:
+            for note in onset:
+                sub_notes.append(note)
+        else:
+            break
+    return sub_notes
+
+def trim_length_pairs(pairs, sec=None):
+    onset_pairs = group_by_onset(pairs)
+    for onset in onset_pairs:
+        all_offsets = [n["score_midi"][1].end for n in onset]
+        max_offset = np.max(all_offsets)
+        if max_offset > sec:
+            break 
+    min_ind = np.min([n["score_midi"][0] for n in onset])
+    return min_ind
+    
 def save_stacked_midi():
     parent_path = "/home/seungyeon/Piano/sarah/recording_data/"
     dirname = "sarah_tone_data"
