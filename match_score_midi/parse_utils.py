@@ -175,22 +175,30 @@ def check_in_order(xml_notes):
             assert prev_onset <= _onset
             prev_note = note 
 
-def extract_xml_notes(xml_doc):
+def extract_xml_notes(xml_doc, note_only=True, apply_grace=True):
     part = xml_doc.parts[0]
     xml_measures = list()
     xml_notes = list()
     # collect all note/measure objects 
     for measure in part.measures:
         for note in measure.notes:
-            if note.is_rest is False:
+            if note_only is True:
+                if note.is_rest is False:
+                    xml_notes.append(note)
+                    xml_measures.append(measure) 
+            elif note_only is False:
                 xml_notes.append(note)
-                xml_measures.append(measure)
+                xml_measures.append(measure) 
     # sort xml notes 
-    xml_notes.sort(key=lambda x: x.pitch[1]) 
+    if note_only is True:
+        xml_notes.sort(key=lambda x: x.pitch[1]) 
     xml_notes.sort(key=lambda x: x.note_duration.time_position)
     xml_notes.sort(key=lambda x: x.measure_number)  
     # post-process xml notes
-    xml_notes_ = apply_grace_notes(xml_notes)
+    if apply_grace is True:
+        xml_notes_ = apply_grace_notes(xml_notes)
+    else:
+        xml_notes_ = xml_notes
     check_in_order(xml_notes_)
     xml_notes_, xml_measures_ = apply_tied_notes(xml_notes_, xml_measures)
     xml_notes_, xml_measures_ = remove_overlaps_xml(xml_notes_, xml_measures_)
@@ -206,26 +214,35 @@ def extract_xml_notes(xml_doc):
 def remove_overlaps_xml(xml_notes, xml_measures):
     # find overlapped note groups
     same_notes_list = list()
-    same_notes = [[0, xml_notes[0]]]
-    prev_note = xml_notes[0]
-    for i, note in enumerate(xml_notes[1:]):
+    for k, note in enumerate(xml_notes):
+        if note.pitch is None:
+            same_notes_list.append([[k, xml_notes[k]]])
+        if note.pitch is not None:
+            same_notes = [[k, xml_notes[k]]]
+            break 
+    prev_note = xml_notes[k]
+    for i, note in enumerate(xml_notes[k+1:]):
+        if note.pitch is None:
+            same_notes_list.append([[i+k+1, note]])
+            continue
         if note.is_grace_note is False:
             if prev_note.pitch[1] == note.pitch[1] and \
                 prev_note.note_duration.time_position == \
                 note.note_duration.time_position: 
-                same_notes.append([i+1, note])
+                same_notes.append([i+k+1, note])
             else:
                 same_notes_list.append(same_notes)
-                same_notes = [[i+1, note]]
+                same_notes = [[i+k+1, note]]
         elif note.is_grace_note is True:
             if prev_note.pitch[1] == note.pitch[1] and \
                 prev_note.x_position == note.x_position: 
-                same_notes.append([i+1, note])
+                same_notes.append([i+k+1, note])
             else:
                 same_notes_list.append(same_notes)
-                same_notes = [[i+1, note]]
+                same_notes = [[i+k+1, note]]
         prev_note = note
     same_notes_list.append(same_notes)
+    same_notes_list = sorted(same_notes_list, key=lambda x: x[0][0])
     # clean overlapped notes
     cleaned_list = list()
     for j, each_group in enumerate(same_notes_list):
