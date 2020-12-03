@@ -10,10 +10,16 @@ import pretty_midi
 import csv
 import time
 import shutil
+from decimal import Decimal, getcontext, ROUND_HALF_UP, InvalidOperation
 
 import matplotlib
 matplotlib.use("agg")
 import matplotlib.pyplot as plt
+
+dc = getcontext()
+dc.prec = 48
+dc.rounding = ROUND_HALF_UP
+
 
 def ind2str(ind, n):
     ind_ = str(ind)
@@ -365,6 +371,8 @@ def extract_midi_notes(midi_path, clean=False, no_pedal=False):
     ccs = list()
     for inst in midi_obj.instruments:
         for note in inst.notes:
+            note.start = float(round(Decimal(str(note.start)), 6))
+            note.end = float(round(Decimal(str(note.end)), 6))
             midi_notes.append(note)
         for cc in inst.control_changes:
             ccs.append(cc)
