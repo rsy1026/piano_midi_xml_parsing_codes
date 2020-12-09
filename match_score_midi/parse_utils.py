@@ -183,7 +183,8 @@ def check_in_order(xml_notes):
             assert prev_onset <= _onset
             prev_note = note 
 
-def extract_xml_notes(xml_doc, note_only=True, apply_grace=True):
+def extract_xml_notes(
+    xml_doc, note_only=True, apply_grace=True, apply_tie=True):
     part = xml_doc.parts[0]
     xml_measures = list()
     xml_notes = list()
@@ -191,12 +192,24 @@ def extract_xml_notes(xml_doc, note_only=True, apply_grace=True):
     for measure in part.measures:
         for note in measure.notes:
             if note_only is True:
-                if note.is_rest is False:
-                    xml_notes.append(note)
-                    xml_measures.append(measure) 
+                if apply_grace is False:
+                    if note.is_rest is False and note.is_grace_note is False:
+                        xml_notes.append(note)
+                        xml_measures.append(measure) 
+                elif apply_grace is True:
+                    if note.is_rest is False: 
+                        xml_notes.append(note)
+                        xml_measures.append(measure)  
+
             elif note_only is False:
-                xml_notes.append(note)
-                xml_measures.append(measure) 
+                if apply_grace is False:
+                    if note.is_grace_note is False:
+                        xml_notes.append(note)
+                        xml_measures.append(measure)
+                elif apply_grace is True:
+                    xml_notes.append(note)
+                    xml_measures.append(measure)   
+                                     
     # sort xml notes 
     if note_only is True:
         xml_notes.sort(key=lambda x: x.pitch[1]) 
@@ -208,7 +221,11 @@ def extract_xml_notes(xml_doc, note_only=True, apply_grace=True):
     else:
         xml_notes_ = xml_notes
     check_in_order(xml_notes_)
-    xml_notes_, xml_measures_ = apply_tied_notes(xml_notes_, xml_measures)
+    if apply_tie is True:
+        xml_notes_, xml_measures_ = apply_tied_notes(xml_notes_, xml_measures)
+    else:
+        xml_notes_ = xml_notes_
+        xml_measures_ = xml_measures
     xml_notes_, xml_measures_ = remove_overlaps_xml(xml_notes_, xml_measures_)
     # check measure numbers
     check_note_measure_pair(xml_notes_, xml_measures_)

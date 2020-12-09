@@ -782,7 +782,11 @@ class Direction(object): # added by DS
     child = child_list[0]
     staff = direction.find('staff')
     sound = direction.find('sound') # added by SY
-    self.staff = staff.text
+    try: # added by SY
+      self.staff = staff.text
+    except AttributeError:
+      self.staff = None
+
     if 'placement' in direction.attrib.keys(): # whether direction is above/below staff
       self.placement = direction.attrib['placement']
     if sound is not None:
@@ -883,7 +887,10 @@ class Direction(object): # added by DS
     """Parse the MusicXML <octave-shift> element.
 
     """
-    self.type = {'type': 'octave-shift', 'content': xml_shift.attrib['type'], 'size':  xml_shift.attrib['size']}
+    try:
+      self.type = {'type': 'octave-shift', 'content': xml_shift.attrib['type'], 'size':  xml_shift.attrib['size']}
+    except KeyError: # added by SY
+      self.type = None
 
   def _parse_metronome(self, xml_metronome):
     """Parse the MusicXML <metronome> element.
