@@ -30,23 +30,25 @@ def ind2str(ind, n):
 def remove_files():
     # parent_path = '/home/rsy/Dropbox/RSY/Piano/data/chopin_maestro/original'
     parent_path = '/data/chopin_cleaned/original/Chopin_Etude'
+    # parent_path = '/data/chopin_maestro/original/Chopin_Etude'
     pieces = sorted(glob(os.path.join(parent_path, '*/')))
     # for c in categs:
     #     pieces = sorted(glob(os.path.join(c, '*/')))
     for p in pieces:
         # p = pieces[12]
         players = sorted(glob(os.path.join(p, '*/')))
-        npy_files = sorted(glob(os.path.join(p, '*.npy')))
-        for a in npy_files:
-            os.remove(a)
+        # npy_files = sorted(glob(os.path.join(p, '*.npy')))
+        # for a in npy_files:
+            # os.remove(a)
         for pl in players:
-            txt_files = sorted(glob(os.path.join(pl, '*.txt')))
-            npy_files = sorted(glob(os.path.join(pl, '*.npy')))
+            # txt_files = sorted(glob(os.path.join(pl, '*.txt')))
+            npy_files = sorted(glob(os.path.join(pl, '*p.npy')))
             # xml_files = sorted(glob(os.path.join(pl, '*.xml')))
-            mid_files = sorted(glob(os.path.join(pl, '*.cleaned.mid')))
-            mid_files += sorted(glob(os.path.join(pl, 'score_ref.mid')))
+            # mid_files = sorted(glob(os.path.join(pl, '*.cleaned.mid')))
+            # mid_files += sorted(glob(os.path.join(pl, 'score_ref.mid')))
             # all_files = txt_files + npy_files + xml_files + mid_files
-            all_files = txt_files + mid_files + npy_files
+            # all_files = txt_files + mid_files + npy_files
+            all_files = npy_files
             for a in all_files:
                 os.remove(a)
 
