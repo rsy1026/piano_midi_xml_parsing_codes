@@ -138,6 +138,8 @@ class XML_SCORE_PERFORM_MATCH(object):
 
         score = smid 
         assert type(pmids) is list
+        print()
+        print()
 
         if wav is not None:
             ### PERFORM WAV - PERFORM MIDI ### 
@@ -174,8 +176,6 @@ class XML_SCORE_PERFORM_MATCH(object):
             xml, score, performs, corresps, 
             save_pairs=save_pairs, plain=plain, plot=plot)  
 
-        print()
-        print()
 
         return pairs, performs
 
