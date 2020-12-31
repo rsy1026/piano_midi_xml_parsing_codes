@@ -155,14 +155,23 @@ class XML_SCORE_PERFORM_MATCH(object):
         if corresps is None:
             corresps = list()
             for perform in performs:
+                perform_name = '.'.join(os.path.basename(perform).split('.')[:-1])
+                # get directory for saving
                 if self.save_dir is None:
                     save_dir_ = os.path.dirname(perform)
                 else:
                     save_dir_ = self.save_dir
-                print("saving corresp at {}".format(save_dir_))
-                corresp = save_corresp_file(
-                    perform, score, self.program_dir, save_dir_) 
+                # check if corresp exists
+                any_corresp = os.path.join(save_dir_, 
+                    "{}.cleaned_corresp.txt".format(perform_name))
+                if not os.path.exists(any_corresp): # make new corresp
+                    print("saving corresp at {}".format(save_dir_))
+                    corresp = save_corresp_file(
+                        perform, score, self.program_dir, save_dir_) 
+                else: # already exists
+                    corresp = any_corresp
                 corresps.append(corresp)
+
             os.chdir(self.current_dir)
             print("** aligned score midi-perform midi! **          ")
        

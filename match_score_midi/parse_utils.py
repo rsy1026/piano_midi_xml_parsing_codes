@@ -41,16 +41,17 @@ def remove_files():
         # for a in npy_files:
             # os.remove(a)
         for pl in players:
-            # txt_files = sorted(glob(os.path.join(pl, '*.txt')))
-            npy_files = sorted(glob(os.path.join(pl, '*p.npy')))
+            txt_files = sorted(glob(os.path.join(pl, '*.txt')))
+            npy_files = sorted(glob(os.path.join(pl, '*.npy')))
             # xml_files = sorted(glob(os.path.join(pl, '*.xml')))
-            # mid_files = sorted(glob(os.path.join(pl, '*.cleaned.mid')))
+            mid_files = sorted(glob(os.path.join(pl, '*.cleaned.mid')))
             # mid_files += sorted(glob(os.path.join(pl, 'score_ref.mid')))
             # all_files = txt_files + npy_files + xml_files + mid_files
-            # all_files = txt_files + mid_files + npy_files
-            all_files = npy_files
-            for a in all_files:
-                os.remove(a)
+            all_files = txt_files + mid_files + npy_files
+            # all_files = npy_files
+            # for a in all_files:
+                # os.remove(a)
+            shutil.rmtree(pl[:-1])
 
 def quantize(x, unit=None):
     div = x // unit
@@ -1040,7 +1041,7 @@ def save_changed_midi(
         prev_note = note
         prev_new_note = new_note
     # new midi
-    midi_new = pretty_midi.PrettyMIDI(resolution=1000, initial_tempo=120) # new midi object
+    midi_new = pretty_midi.PrettyMIDI(resolution=10000, initial_tempo=120) # new midi object
     inst_new = pretty_midi.Instrument(0) # new instrument object
     inst_new.notes = make_midi_start_zero(new_notes)
     midi_new.instruments.append(inst_new)               
