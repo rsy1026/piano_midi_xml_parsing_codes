@@ -29,7 +29,8 @@ def ind2str(ind, n):
 
 def remove_files():
     # parent_path = '/home/rsy/Dropbox/RSY/Piano/data/chopin_maestro/original'
-    parent_path = '/data/chopin_cleaned/original/Chopin_Etude'
+    # parent_path = '/data/chopin_cleaned/original/Chopin_Etude'
+    parent_path = '/data/chopin_cleaned/exp_data/test/raw/Chopin_Etude'
     # parent_path = '/data/chopin_maestro/original/Chopin_Etude'
     pieces = sorted(glob(os.path.join(parent_path, '*/')))
     # for c in categs:
@@ -37,21 +38,38 @@ def remove_files():
     for p in pieces:
         # p = pieces[12]
         players = sorted(glob(os.path.join(p, '*/')))
-        # npy_files = sorted(glob(os.path.join(p, '*.npy')))
-        # for a in npy_files:
-            # os.remove(a)
+        npy_files = sorted(glob(os.path.join(p, 'oup3.*.npy')))
+        for a in npy_files:
+            os.remove(a)
         for pl in players:
-            txt_files = sorted(glob(os.path.join(pl, '*.txt')))
-            npy_files = sorted(glob(os.path.join(pl, '*.npy')))
+            # txt_files = sorted(glob(os.path.join(pl, '*.txt')))
+            npy_files = sorted(glob(os.path.join(pl, 'oup2.npy')))
             # xml_files = sorted(glob(os.path.join(pl, '*.xml')))
-            mid_files = sorted(glob(os.path.join(pl, '*.cleaned.mid')))
+            # mid_files = sorted(glob(os.path.join(pl, '*.cleaned.mid')))
             # mid_files += sorted(glob(os.path.join(pl, 'score_ref.mid')))
             # all_files = txt_files + npy_files + xml_files + mid_files
-            all_files = txt_files + mid_files + npy_files
-            # all_files = npy_files
-            # for a in all_files:
-                # os.remove(a)
-            shutil.rmtree(pl[:-1])
+            # all_files = txt_files + mid_files + npy_files
+            all_files = npy_files
+            for a in all_files:
+                os.remove(a)
+            # shutil.rmtree(pl[:-1])
+
+def moving_avr(data, win_len=None):
+    new_data = list()
+    assert win_len % 2 == 1 
+    assert win_len > 1
+    unit = (win_len - 1) // 2
+
+    for i in range(len(data)):
+        minind = np.max([0, i-unit])
+        maxind = np.min([len(data), i+unit+1])
+        data_in_range = data[minind:maxind]
+        in_range = [d for d in data_in_range if d is not None]
+        assert len(in_range) > 0
+        mean_data = np.mean(in_range, axis=0)
+        new_data.append(mean_data)
+
+    return np.asarray(new_data)
 
 def quantize(x, unit=None):
     div = x // unit
@@ -72,19 +90,29 @@ def quantize_to_sample(value, unit):
     sample = int(quantized // unit)
     return sample
 
+def quantize_to_frame(value, unit):
+    # for making pianoroll from MIDI 
+    sample = int(round(Decimal(str(value / unit))))
+    return sample
+
 def make_pianoroll(notes, start=None, maxlen=None, 
     unit=None, front_buffer=0., back_buffer=0.):
     '''
-    unit, buffers in seconds
+    unit, buffers: in seconds
+    start: time to subtract to make roll start at certain time
     '''
+
+    unit = float(round(Decimal(str(unit)), 3))
     if start is None:
         start = np.min([n.start for n in notes])
     if maxlen is None:
-        maxlen = np.max([n.end for n in notes])
-        maxlen = quantize_to_sample(maxlen, unit=unit) 
+        min_ = np.min([n.start for n in notes])
+        max_ = np.max([n.end for n in notes])
+        maxlen = max_ - min_
+        maxlen = quantize_to_frame(maxlen, unit=unit) 
 
-    front_buffer_sample = quantize_to_sample(front_buffer, unit=unit)
-    back_buffer_sample = quantize_to_sample(back_buffer, unit=unit)
+    front_buffer_sample = quantize_to_frame(front_buffer, unit=unit)
+    back_buffer_sample = quantize_to_frame(back_buffer, unit=unit)
     maxlen += back_buffer_sample + front_buffer_sample
     roll = np.zeros([88, maxlen])
 
@@ -96,10 +124,15 @@ def make_pianoroll(notes, start=None, maxlen=None,
             hand = 0
         elif n.pitch < 70: # left-hand(temporary)
             hand = 1
-        onset = quantize_to_sample(
-            n.start - start + front_buffer, unit=unit)
-        offset = quantize_to_sample(
-            n.end - start + front_buffer, unit=unit)
+        # onset = quantize_to_sample(
+        #     n.start - start + front_buffer, unit=unit)
+        # offset = quantize_to_sample(
+        #     n.end - start + front_buffer, unit=unit)
+        dur_raw = n.end - n.start
+        dur = quantize_to_frame(dur_raw, unit=unit) 
+        onset = quantize_to_frame(
+            n.start - start + front_buffer, unit=unit)  
+        offset = onset + dur    
         onset_list.append([hand, onset])
         offset_list.append([hand, offset])       
         vel = n.velocity
@@ -751,6 +784,9 @@ def match_XML_to_scoreMIDI_plain(xml_parsed, score_parsed):
             score_matched.append(s)
 
             pairs.append(pair)
+            
+        elif match is False:
+            print("not-matched note: (note){}, (measure){}".format(xml_note, xml_measure))
         
         print("matched {}th xml note: matched: {} ".format(x, match), end='\r')
         
@@ -1123,11 +1159,56 @@ def make_onset_pairs(pairs):
         if onset == prev_onset:
             same_onset.append(pair)
         elif onset > prev_onset:
+            same_onset = sorted(same_onset, 
+                key=lambda x: x['score_midi'][0])
             onset_list.append(same_onset)
             same_onset = [pair]
         prev_onset = onset
+    same_onset = sorted(same_onset, 
+        key=lambda x: x['score_midi'][0])
     onset_list.append(same_onset)            
     return onset_list
+
+def make_onset_list_pick(same_onset, out):
+    '''
+    get only the lowest note for each onset
+    '''
+    new_out = list()
+    for i in range(len(out)):
+        o = same_onset[i] 
+        if o == 0:
+            new_out.append(out[i])
+        elif o == 1:
+            continue
+    return np.asarray(new_out)
+
+def make_onset_list_all(same_onset, out):
+    '''
+    get all notes in each onset
+    '''
+    new_out = list()
+    is_onset = [out[0]]
+    for i in range(1, len(out)):
+        o = same_onset[i] 
+        if o == 0:
+            new_out.append(is_onset)
+            is_onset = [out[i]]
+        elif o == 1:
+            is_onset.append(out[i])
+    new_out.append(is_onset)
+    return new_out
+
+def make_note_list(same_onset, out):
+    new_out = list()
+    j = -1
+    for i in range(len(out)):
+        o = same_onset[i] 
+        if o == 0:
+            j += 1
+            new_out.append(out[j])
+        elif o == 1:
+            new_out.append(out[j])
+    return np.asarray(new_out)
 
 def save_stacked_midi():
     parent_path = "/home/seungyeon/Piano/sarah/recording_data/"

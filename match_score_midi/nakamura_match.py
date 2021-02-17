@@ -66,11 +66,19 @@ def save_corresp_file(perform, score, tool_path, save_path, remove_cleaned=False
         else_txt = glob('./*[!_corresp].txt'.format(_perform))
         for file_ in else_txt:
             os.remove(file_)
-        os.remove('./{}.cleaned_spr.txt'.format(_perform))
-        os.remove('./{}.cleaned_spr.txt'.format(_score))
+        _perform_txt = './{}.cleaned_spr.txt'.format(_perform)
+        _score_txt = './{}.cleaned_spr.txt'.format(_score)
+        if os.path.exists(_perform_txt):
+            os.remove(_perform_txt)
+        if os.path.exists(_score_txt):
+            os.remove(_score_txt)
         if remove_cleaned is True:
-            os.remove('./{}.cleaned.mid'.format(_perform))
-            os.remove('./{}.cleaned.mid'.format(_score))
+            _perform_clean = './{}.cleaned.mid'.format(_perform)
+            _score_clean = './{}.cleaned.mid'.format(_score)
+            if os.path.exists(_perform_clean):
+                os.remove(_perform_clean)
+            if os.path.exists(_score_clean):
+                os.remove(_score_clean)
         print('saved corresp file for {}'.format(_perform))
         print()
     
