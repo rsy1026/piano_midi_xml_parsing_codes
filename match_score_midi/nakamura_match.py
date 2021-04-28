@@ -7,7 +7,7 @@ import os
 import shutil
 import pretty_midi
 import numpy as np
-from parse_utils import get_cleaned_midi
+from parse_utils import extract_midi_notes
 
 def xml_score_match(xml, score):
     nakamura_c = './MusicXMLToMIDIAlign.sh'
@@ -57,8 +57,10 @@ def save_corresp_file(perform, score, tool_path, save_path, remove_cleaned=False
         perform_savename = os.path.join(save_path, "{}.cleaned.mid".format(_perform))
         score_savename = os.path.join(save_path, "{}.cleaned.mid".format(_score))
         # temporally save cleaned midi
-        get_cleaned_midi(perform, perform_savename, no_vel=False, no_pedal=True)
-        get_cleaned_midi(score, score_savename, no_vel=True, no_pedal=True)
+        extract_midi_notes(perform, 
+            clean=False, no_pedal=True, save=True, savepath=perform_savename)
+        extract_midi_notes(score, 
+            clean=True, save=True, savepath=score_savename)
         # save corresp file
         os.chdir(os.path.dirname(perform))
         make_corresp(_score+".cleaned", _perform+".cleaned", './MIDIToMIDIAlign.sh')

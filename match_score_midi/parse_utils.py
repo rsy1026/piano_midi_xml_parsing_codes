@@ -29,8 +29,9 @@ def ind2str(ind, n):
 
 def remove_files():
     # parent_path = '/home/rsy/Dropbox/RSY/Piano/data/chopin_maestro/original'
-    # parent_path = '/data/chopin_cleaned/original/Chopin_Etude'
-    parent_path = '/data/chopin_cleaned/exp_data/test/raw/Chopin_Etude'
+    parent_path = '/data/chopin_cleaned/original/Chopin_Nocturne'
+    assert os.path.exists(parent_path)
+    # parent_path = '/data/chopin_cleaned/exp_data/test/raw/Chopin_Etude'
     # parent_path = '/data/chopin_maestro/original/Chopin_Etude'
     pieces = sorted(glob(os.path.join(parent_path, '*/')))
     # for c in categs:
@@ -38,35 +39,47 @@ def remove_files():
     for p in pieces:
         # p = pieces[12]
         players = sorted(glob(os.path.join(p, '*/')))
-        npy_files = sorted(glob(os.path.join(p, 'oup3.*.npy')))
-        for a in npy_files:
-            os.remove(a)
+        # npy_files = sorted(glob(os.path.join(p, 'oup3.*.npy')))
+        # for a in npy_files:
+            # os.remove(a)
         for pl in players:
-            # txt_files = sorted(glob(os.path.join(pl, '*.txt')))
-            npy_files = sorted(glob(os.path.join(pl, 'oup2.npy')))
+            txt_files = sorted(glob(os.path.join(pl, '*.txt')))
+            npy_files = sorted(glob(os.path.join(pl, '*.npy')))
+            # npy_files = sorted(glob(os.path.join(pl, 'inp2.npy')))
+            # npy_files += sorted(glob(os.path.join(pl, 'oup*.npy')))
             # xml_files = sorted(glob(os.path.join(pl, '*.xml')))
-            # mid_files = sorted(glob(os.path.join(pl, '*.cleaned.mid')))
+            mid_files = sorted(glob(os.path.join(pl, '*.cleaned.mid')))
             # mid_files += sorted(glob(os.path.join(pl, 'score_ref.mid')))
+            # all_files = sorted(glob(os.path.join(pl, '*.cleaned.cleaned_*')))
             # all_files = txt_files + npy_files + xml_files + mid_files
-            # all_files = txt_files + mid_files + npy_files
-            all_files = npy_files
+            all_files = txt_files + mid_files + npy_files
+            # all_files = mid_files + txt_files
             for a in all_files:
                 os.remove(a)
             # shutil.rmtree(pl[:-1])
 
-def moving_avr(data, win_len=None):
+def moving_avr(data, win_len=None, stat=np.mean, half=False):
     new_data = list()
-    assert win_len % 2 == 1 
-    assert win_len > 1
-    unit = (win_len - 1) // 2
+
+    if half is False:
+        assert win_len % 2 == 1 
+        assert win_len > 1
+        unit = (win_len - 1) // 2
+    elif half is True:
+        unit = int(win_len - 1)
 
     for i in range(len(data)):
-        minind = np.max([0, i-unit])
-        maxind = np.min([len(data), i+unit+1])
-        data_in_range = data[minind:maxind]
+        if half is False:
+            minind = np.max([0, i-unit])
+            maxind = np.min([len(data), i+unit+1])
+        elif half is True:
+            minind = np.max([0, i-unit])
+            maxind = np.min([len(data), i+1])     
+        data_in_range = data[minind:maxind]       
+        
         in_range = [d for d in data_in_range if d is not None]
         assert len(in_range) > 0
-        mean_data = np.mean(in_range, axis=0)
+        mean_data = stat(in_range, axis=0)
         new_data.append(mean_data)
 
     return np.asarray(new_data)
@@ -249,25 +262,34 @@ def extract_xml_notes(
         xml_notes.sort(key=lambda x: x.pitch[1]) 
     xml_notes.sort(key=lambda x: x.note_duration.time_position)
     xml_notes.sort(key=lambda x: x.measure_number)  
-    # post-process xml notes
+
+    ## post-process ##
+    # for applying grace
     if apply_grace is True:
         xml_notes_ = apply_grace_notes(xml_notes)
     else:
         xml_notes_ = xml_notes
+    # check order (for applying grace)
     check_in_order(xml_notes_)
+    
+    # for applying tie
     if apply_tie is True:
         xml_notes_, xml_measures_ = apply_tied_notes(xml_notes_, xml_measures)
     else:
         xml_notes_ = xml_notes_
         xml_measures_ = xml_measures
     xml_notes_, xml_measures_ = remove_overlaps_xml(xml_notes_, xml_measures_)
+    
     # check measure numbers
     check_note_measure_pair(xml_notes_, xml_measures_)
+
+    ## wrap-up ##
     # make note-measure pairs
     note_measure_pair = list()
     for n, m in zip(xml_notes_, xml_measures_):
         pair = {'note': n, 'measure': m}
         note_measure_pair.append(pair)
+
     return note_measure_pair
 
 def remove_overlaps_xml(xml_notes, xml_measures):
@@ -376,8 +398,7 @@ def check_overlapped_midi_notes():
             print("checked midi for {}: {} ({}/{})".format(
                 category, piece, len(midi_notes), len(midi_notes_)))
 
-def get_cleaned_midi(
-    filepath, savename=None, no_vel=None, no_pedal=None, save=True):
+def get_cleaned_midi(filepath, no_vel=None, no_pedal=None):
     filename = os.path.basename(filepath).split('.')[0]
     midi = pretty_midi.PrettyMIDI(filepath)
     midi_new = pretty_midi.PrettyMIDI(resolution=10000, initial_tempo=120) # new midi object
@@ -402,23 +423,21 @@ def get_cleaned_midi(
                 track.notes[i].velocity = 64
         if no_pedal == True:
             track.control_changes = list()
-    if save == True:
-        midi_new.write(savename)
-        return None
-    elif save == False:
-        return midi_new
 
-    print("{}: {}/{} notes saved --> plain vel: {}".format(
+    print("{}: {}/{} notes --> plain vel: {}".format(
         filename, new_note_num, orig_note_num, no_vel))
 
-def extract_midi_notes(midi_path, clean=False, no_pedal=False):
+    return midi_new
+
+def extract_midi_notes(
+    midi_path, clean=False, no_pedal=False, save=False, savepath=None):
     if clean is False:
         midi_obj = get_cleaned_midi(
-            midi_path, no_vel=False, no_pedal=no_pedal, save=False)
+            midi_path, no_vel=False, no_pedal=no_pedal)
 
     elif clean is True:
         midi_obj = get_cleaned_midi(
-            midi_path, no_vel=True, no_pedal=True, save=False)
+            midi_path, no_vel=True, no_pedal=True)
 
     midi_notes = list()
     ccs = list()
@@ -438,8 +457,13 @@ def extract_midi_notes(midi_path, clean=False, no_pedal=False):
     if len(midi_notes) != len(midi_notes_):
         print("cleaned duplicated notes: {}/{}".format(
             len(midi_notes_), len(midi_notes)))
-    
-    return midi_notes_, ccs
+
+    if save is True:
+        save_new_midi(midi_notes_, ccs=ccs, 
+            new_midi_path=savepath, initial_tempo=120, start_zero=False)
+        return None 
+    else:
+        return midi_notes_, ccs
 
 def read_corresp(corresp):
     lines = list()
@@ -696,6 +720,15 @@ def match_XML_to_scoreMIDI(xml_parsed, score_parsed):
     return pairs            
 
 def match_XML_to_scoreMIDI_plain(xml_parsed, score_parsed):
+
+    # if len(xml_parsed) != len(score_parsed):
+    #     if np.abs(len(xml_parsed) - len(score_parsed)) < 3:
+    #         pass 
+    #     else:
+    #         raise AssertionError(
+    #             "** xml and score not matched!! ({} notes)".format(
+    #             len(xml_parsed) - len(score_parsed)))
+
     # check which measures contains grace notes
     grace_measures = [xml_['note'].measure_number 
         for xml_ in xml_parsed if xml_['note'].is_grace_note == True]
@@ -796,7 +829,7 @@ def match_XML_to_scoreMIDI_plain(xml_parsed, score_parsed):
             prev_note_start = xml_note_start
 
     # assert xml and score is paired without disregarded notes
-    assert len(xml_parsed) == len(score_parsed) == len(pairs)
+    assert len(xml_parsed) == len(pairs) or len(score_parsed) == len(pairs)
 
     return pairs            
 
@@ -952,9 +985,10 @@ def match_score_to_performMIDI(
     only_xml = [p for p in new_pairs if p['xml_note'] is not None]
     only_score = [p for p in new_pairs if p['score_midi'] is not None]
     only_perform = [p for p in new_pairs if p['perform_midi'] is not None]
-    assert len(only_xml) == len(xml_parsed)
-    assert len(only_score) == len(score_parsed)
-    assert len(only_perform) == len(perform_parsed)
+    if len(xml_parsed) == len(score_parsed):
+        assert len(only_xml) == len(xml_parsed)
+        assert len(only_score) == len(score_parsed)
+        assert len(only_perform) == len(perform_parsed)
     return new_pairs
 
 def group_by_onset(pairs):
